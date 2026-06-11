@@ -1,4 +1,4 @@
-#if !DEBUG
+import AtomanStudio
 import SwiftUI
 
 @main
@@ -12,4 +12,3 @@ struct AtomanStudioApp: App {
         }
     }
 }
-#endif
