@@ -13,6 +13,7 @@ public struct RootAppView: View {
 public struct MainTabView: View {
     @State private var selectedTab: AppTab = .writing
     @State private var editorViewModel: BlogEditorViewModel
+    @State private var feedViewModel: FeedTimelineViewModel
 
     public init(environment: AppEnvironment) {
         self._editorViewModel = State(
@@ -20,6 +21,9 @@ public struct MainTabView: View {
                 blogAPI: environment.blogAPI,
                 database: environment.database
             )
+        )
+        self._feedViewModel = State(
+            initialValue: FeedTimelineViewModel(feedService: environment.feedAPI)
         )
     }
 
@@ -33,6 +37,20 @@ public struct MainTabView: View {
                 Label("写作", systemImage: "square.and.pencil")
             }
             .tag(AppTab.writing)
+
+            NavigationStack {
+                AuthenticationGateView(
+                    title: "登录后查看订阅",
+                    message: "RSS 订阅和阅读状态保存在云端。登录后可以查看你的订阅时间线。"
+                ) {
+                    FeedTimelineView(viewModel: feedViewModel)
+                }
+                .navigationTitle("订阅")
+            }
+            .tabItem {
+                Label("订阅", systemImage: "dot.radiowaves.left.and.right")
+            }
+            .tag(AppTab.feed)
 
             NavigationStack {
                 DraftListView(drafts: []) { draft in
@@ -63,6 +81,7 @@ public struct MainTabView: View {
 
 public enum AppTab: Hashable {
     case writing
+    case feed
     case drafts
     case channels
 }

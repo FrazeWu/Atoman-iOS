@@ -17,9 +17,10 @@ public struct APIClient {
         method: String = "GET",
         token: String? = nil,
         body: Data? = nil,
-        contentType: String? = "application/json"
+        contentType: String? = "application/json",
+        queryItems: [URLQueryItem] = []
     ) async throws -> (Data, HTTPURLResponse) {
-        var request = URLRequest(url: baseURL.appending(path: path))
+        var request = URLRequest(url: makeURL(path: path, queryItems: queryItems))
         request.httpMethod = method
         request.httpBody = body
         if let token {
@@ -33,5 +34,14 @@ public struct APIClient {
             throw URLError(.badServerResponse)
         }
         return (data, http)
+    }
+
+    private func makeURL(path: String, queryItems: [URLQueryItem]) -> URL {
+        let url = baseURL.appending(path: path)
+        guard !queryItems.isEmpty, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url
+        }
+        components.queryItems = queryItems.sorted { $0.name < $1.name }
+        return components.url ?? url
     }
 }
