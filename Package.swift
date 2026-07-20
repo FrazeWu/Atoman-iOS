@@ -8,6 +8,8 @@ let package = Package(
         .macOS(.v14),
     ],
     products: [
+        .library(name: "AtomanCore", targets: ["AtomanCore"]),
+        .library(name: "AtomanMusic", targets: ["AtomanMusic"]),
         .library(name: "AtomanStudio", targets: ["AtomanStudio"]),
     ],
     dependencies: [
@@ -15,15 +17,25 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "AtomanCore",
+            path: "AtomanCore"
+        ),
+        .target(
+            name: "AtomanMusic",
+            dependencies: ["AtomanCore"],
+            path: "AtomanMusic"
+        ),
+        .target(
             name: "AtomanStudio",
             dependencies: [
+                "AtomanCore",
                 .product(name: "GRDB", package: "GRDB.swift"),
             ],
             path: "AtomanStudio"
         ),
         .testTarget(
             name: "AtomanStudioTests",
-            dependencies: ["AtomanStudio"],
+            dependencies: ["AtomanStudio", "AtomanCore", "AtomanMusic"],
             path: "AtomanStudioTests"
         ),
     ]

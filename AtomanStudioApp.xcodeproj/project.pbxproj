@@ -9,12 +9,21 @@
 /* Begin PBXBuildFile section */
 		10A0000B0000000000000000 /* AtomanStudioApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10A0000A0000000000000000 /* AtomanStudioApp.swift */; };
 		10A000110000000000000000 /* AtomanStudio in Frameworks */ = {isa = PBXBuildFile; productRef = 10A000100000000000000000 /* AtomanStudio */; };
+		10B0000A0000000000000000 /* AtomanMusicApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10B000070000000000000000 /* AtomanMusicApp.swift */; };
+		10B0000B0000000000000000 /* AtomanMusic in Frameworks */ = {isa = PBXBuildFile; productRef = 10B0000F0000000000000000 /* AtomanMusic */; };
+		10B000110000000000000000 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 10B000120000000000000000 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		10A000020000000000000000 /* AtomanStudioApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AtomanStudioApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		10A0000A0000000000000000 /* AtomanStudioApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtomanStudioApp.swift; sourceTree = "<group>"; };
 		10A0000C0000000000000000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		10A000170000000000000000 /* AtomanStudioApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AtomanStudioApp.entitlements; sourceTree = "<group>"; };
+		10B000010000000000000000 /* AtomanMusicApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AtomanMusicApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		10B000070000000000000000 /* AtomanMusicApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AtomanMusicApp.swift; sourceTree = "<group>"; };
+		10B000080000000000000000 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		10B000090000000000000000 /* AtomanMusicApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = AtomanMusicApp.entitlements; sourceTree = "<group>"; };
+		10B000120000000000000000 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -26,6 +35,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		10B000050000000000000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				10B0000B0000000000000000 /* AtomanMusic in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -33,6 +50,7 @@
 			isa = PBXGroup;
 			children = (
 				10A000090000000000000000 /* AtomanStudioApp */,
+				10B000020000000000000000 /* AtomanMusicApp */,
 				10A000010000000000000000 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -41,6 +59,7 @@
 			isa = PBXGroup;
 			children = (
 				10A000020000000000000000 /* AtomanStudioApp.app */,
+				10B000010000000000000000 /* AtomanMusicApp.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -50,8 +69,20 @@
 			children = (
 				10A0000A0000000000000000 /* AtomanStudioApp.swift */,
 				10A0000C0000000000000000 /* Info.plist */,
+				10A000170000000000000000 /* AtomanStudioApp.entitlements */,
 			);
 			path = AtomanStudioApp;
+			sourceTree = "<group>";
+		};
+		10B000020000000000000000 /* AtomanMusicApp */ = {
+			isa = PBXGroup;
+			children = (
+				10B000070000000000000000 /* AtomanMusicApp.swift */,
+				10B000080000000000000000 /* Info.plist */,
+				10B000090000000000000000 /* AtomanMusicApp.entitlements */,
+				10B000120000000000000000 /* Assets.xcassets */,
+			);
+			path = AtomanMusicApp;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -77,6 +108,26 @@
 			productReference = 10A000020000000000000000 /* AtomanStudioApp.app */;
 			productType = "com.apple.product-type.application";
 		};
+		10B000030000000000000000 /* AtomanMusicApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 10B0000C0000000000000000 /* Build configuration list for PBXNativeTarget "AtomanMusicApp" */;
+			buildPhases = (
+				10B000040000000000000000 /* Sources */,
+				10B000050000000000000000 /* Frameworks */,
+				10B000060000000000000000 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AtomanMusicApp;
+			packageProductDependencies = (
+				10B0000F0000000000000000 /* AtomanMusic */,
+			);
+			productName = AtomanMusicApp;
+			productReference = 10B000010000000000000000 /* AtomanMusicApp.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -88,6 +139,9 @@
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					10A000040000000000000000 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					10B000030000000000000000 = {
 						CreatedOnToolsVersion = 26.0;
 					};
 				};
@@ -110,6 +164,7 @@
 			projectRoot = "";
 			targets = (
 				10A000040000000000000000 /* AtomanStudioApp */,
+				10B000030000000000000000 /* AtomanMusicApp */,
 			);
 		};
 /* End PBXProject section */
@@ -122,6 +177,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		10B000060000000000000000 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				10B000110000000000000000 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -130,6 +193,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				10A0000B0000000000000000 /* AtomanStudioApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		10B000040000000000000000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				10B0000A0000000000000000 /* AtomanMusicApp.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -257,6 +328,7 @@
 		10A000150000000000000000 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AtomanStudioApp/AtomanStudioApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
@@ -277,6 +349,7 @@
 		10A000160000000000000000 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = AtomanStudioApp/AtomanStudioApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
@@ -286,6 +359,54 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.atoman.studio;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		10B0000D0000000000000000 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ATOMAN_API_BASE_URL = "http://localhost:8080/api/v1";
+				ATOMAN_WEB_BASE_URL = "http://localhost:5173";
+				CODE_SIGN_ENTITLEMENTS = AtomanMusicApp/AtomanMusicApp.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AtomanMusicApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.atoman.music;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		10B0000E0000000000000000 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ATOMAN_API_BASE_URL = "https://api.atoman.org/api/v1";
+				ATOMAN_WEB_BASE_URL = "https://atoman.org";
+				CODE_SIGN_ENTITLEMENTS = AtomanMusicApp/AtomanMusicApp.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = AtomanMusicApp/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.atoman.music;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -315,6 +436,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		10B0000C0000000000000000 /* Build configuration list for PBXNativeTarget "AtomanMusicApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				10B0000D0000000000000000 /* Debug */,
+				10B0000E0000000000000000 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -329,6 +459,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 10A000120000000000000000 /* XCLocalSwiftPackageReference "." */;
 			productName = AtomanStudio;
+		};
+		10B0000F0000000000000000 /* AtomanMusic */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 10A000120000000000000000 /* XCLocalSwiftPackageReference "." */;
+			productName = AtomanMusic;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

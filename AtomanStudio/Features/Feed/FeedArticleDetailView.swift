@@ -38,7 +38,7 @@ public struct FeedArticleDetailView: View {
             .padding()
         }
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .primaryAction) {
                 Button(action: onToggleStar) {
                     Image(systemName: item.isStarred ? "star.fill" : "star")
                 }

@@ -6,10 +6,16 @@ import FoundationNetworking
 public struct APIClient {
     public let baseURL: URL
     public var session: URLSession
+    private let onUnauthorized: (@Sendable () async -> Void)?
 
-    public init(baseURL: URL, session: URLSession = .shared) {
+    public init(
+        baseURL: URL,
+        session: URLSession = .shared,
+        onUnauthorized: (@Sendable () async -> Void)? = nil
+    ) {
         self.baseURL = baseURL
         self.session = session
+        self.onUnauthorized = onUnauthorized
     }
 
     public func request(
@@ -32,6 +38,9 @@ public struct APIClient {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw URLError(.badServerResponse)
+        }
+        if http.statusCode == 401, token?.isEmpty == false {
+            await onUnauthorized?()
         }
         return (data, http)
     }

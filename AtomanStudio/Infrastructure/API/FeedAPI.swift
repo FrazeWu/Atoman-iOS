@@ -1,3 +1,4 @@
+import AtomanCore
 import Foundation
 
 public protocol FeedServicing {

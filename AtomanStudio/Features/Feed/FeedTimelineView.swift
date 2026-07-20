@@ -95,7 +95,7 @@ private struct FeedTimelineCard: View {
             HStack {
                 Text(item.sourceTitle)
                     .font(.caption.weight(item.isRead ? .regular : .bold))
-                    .foregroundStyle(item.isRead ? .secondary : .tint)
+                    .foregroundStyle(item.isRead ? Color.secondary : Color.accentColor)
                 Spacer()
                 Button(action: onToggleStar) {
                     Image(systemName: item.isStarred ? "star.fill" : "star")

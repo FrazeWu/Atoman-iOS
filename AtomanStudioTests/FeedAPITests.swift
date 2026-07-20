@@ -1,3 +1,4 @@
+import AtomanCore
 import Foundation
 import XCTest
 @testable import AtomanStudio
@@ -36,7 +37,7 @@ final class FeedAPITests: XCTestCase {
         let api = makeAPI { request in
             XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v1/feed/timeline/mark-read")
             XCTAssertEqual(request.httpMethod, "POST")
-            let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: [String]]
+            let body = try JSONSerialization.jsonObject(with: Self.bodyData(from: request)) as? [String: [String]]
             XCTAssertEqual(body?["feed_item_ids"], ["item-1"])
             return Self.response(request, body: "{\"message\":\"ok\"}")
         }
@@ -51,7 +52,8 @@ final class FeedAPITests: XCTestCase {
             return Self.response(request, body: "{\"starred\":true,\"message\":\"Item starred\"}")
         }
 
-        XCTAssertTrue(try await api.toggleStar(feedItemID: "item-1"))
+        let isStarred = try await api.toggleStar(feedItemID: "item-1")
+        XCTAssertTrue(isStarred)
     }
 
     private func makeAPI(handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)) -> FeedAPI {
@@ -65,6 +67,31 @@ final class FeedAPITests: XCTestCase {
 
     private static func response(_ request: URLRequest, body: String) -> (HTTPURLResponse, Data) {
         (HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(body.utf8))
+    }
+
+    private static func bodyData(from request: URLRequest) throws -> Data {
+        if let body = request.httpBody {
+            return body
+        }
+        guard let stream = request.httpBodyStream else {
+            return Data()
+        }
+
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 1_024)
+        while stream.hasBytesAvailable {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count < 0 {
+                throw stream.streamError ?? URLError(.cannotDecodeContentData)
+            }
+            if count == 0 {
+                break
+            }
+            data.append(buffer, count: count)
+        }
+        return data
     }
 }
 

@@ -1,3 +1,4 @@
+import AtomanCore
 import SwiftUI
 
 public struct AuthenticationGateView<Content: View>: View {

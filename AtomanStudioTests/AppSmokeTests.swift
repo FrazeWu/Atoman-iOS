@@ -1,4 +1,5 @@
 import SwiftUI
+import AtomanCore
 import XCTest
 @testable import AtomanStudio
 

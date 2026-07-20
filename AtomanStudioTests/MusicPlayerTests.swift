@@ -1,0 +1,155 @@
+import Foundation
+import XCTest
+@testable import AtomanMusic
+
+@MainActor
+final class MusicPlayerTests: XCTestCase {
+    func testPlayQueueLoadsRequestedSongAndStartsEngine() throws {
+        let engine = PlaybackEngineSpy()
+        let player = MusicPlayer(engine: engine)
+        let songs = try [song(id: "one"), song(id: "two")]
+
+        player.play(songs: songs, startingAt: "two")
+
+        XCTAssertEqual(player.currentSong?.id, "two")
+        XCTAssertEqual(engine.loadedURL?.absoluteString, "https://cdn.example.com/two.mp3")
+        XCTAssertEqual(engine.playCallCount, 1)
+        XCTAssertTrue(player.isPlaying)
+    }
+
+    func testNextLoadsFollowingSong() throws {
+        let engine = PlaybackEngineSpy()
+        let player = MusicPlayer(engine: engine)
+        let songs = try [song(id: "one"), song(id: "two")]
+        player.play(songs: songs, startingAt: "one")
+
+        player.playNext()
+
+        XCTAssertEqual(player.currentSong?.id, "two")
+        XCTAssertEqual(engine.loadedURL?.absoluteString, "https://cdn.example.com/two.mp3")
+        XCTAssertEqual(engine.playCallCount, 2)
+    }
+
+    func testTogglePlaybackPausesAndResumes() throws {
+        let engine = PlaybackEngineSpy()
+        let player = MusicPlayer(engine: engine)
+        player.play(songs: try [song(id: "one")], startingAt: "one")
+
+        player.togglePlayback()
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertEqual(engine.pauseCallCount, 1)
+
+        player.togglePlayback()
+        XCTAssertTrue(player.isPlaying)
+        XCTAssertEqual(engine.playCallCount, 2)
+    }
+
+    func testReplayingSameSongRecordsEachPlaybackAfterFiveSeconds() async throws {
+        let engine = PlaybackEngineSpy()
+        let recordedTwice = expectation(description: "records both playbacks")
+        recordedTwice.expectedFulfillmentCount = 2
+        let player = MusicPlayer(engine: engine) { songID in
+            XCTAssertEqual(songID, "one")
+            recordedTwice.fulfill()
+        }
+        let songs = try [song(id: "one")]
+
+        player.play(songs: songs, startingAt: "one")
+        engine.onTimeUpdate?(5, 120)
+        player.play(songs: songs, startingAt: "one")
+        engine.onTimeUpdate?(5, 120)
+
+        await fulfillment(of: [recordedTwice], timeout: 0.2)
+    }
+
+    func testPlaybackFailureStopsPlaybackAndRetryReloadsCurrentSong() throws {
+        let engine = PlaybackEngineSpy()
+        let player = MusicPlayer(engine: engine)
+        player.play(songs: try [song(id: "one")], startingAt: "one")
+
+        engine.onPlaybackFailed?("音频加载失败")
+
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertEqual(player.errorMessage, "音频加载失败")
+
+        player.retryCurrentSong()
+
+        XCTAssertTrue(player.isPlaying)
+        XCTAssertNil(player.errorMessage)
+        XCTAssertEqual(engine.loadCallCount, 2)
+        XCTAssertEqual(engine.playCallCount, 2)
+    }
+
+    func testBufferingStateFollowsPlaybackEngine() throws {
+        let engine = PlaybackEngineSpy()
+        let player = MusicPlayer(engine: engine)
+        player.play(songs: try [song(id: "one")], startingAt: "one")
+
+        engine.onBufferingChanged?(true)
+        XCTAssertTrue(player.isBuffering)
+
+        engine.onBufferingChanged?(false)
+        XCTAssertFalse(player.isBuffering)
+    }
+
+    func testInterruptionResumesOnlyWhenSystemRecommendsIt() throws {
+        let engine = PlaybackEngineSpy()
+        let player = MusicPlayer(engine: engine)
+        player.play(songs: try [song(id: "one")], startingAt: "one")
+
+        engine.onInterruptionBegan?()
+        XCTAssertFalse(player.isPlaying)
+
+        engine.onInterruptionEnded?(true)
+        XCTAssertTrue(player.isPlaying)
+        XCTAssertEqual(engine.playCallCount, 2)
+    }
+
+    func testOutputDisconnectPausesPlayback() throws {
+        let engine = PlaybackEngineSpy()
+        let player = MusicPlayer(engine: engine)
+        player.play(songs: try [song(id: "one")], startingAt: "one")
+
+        engine.onOutputDisconnected?()
+
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertEqual(engine.pauseCallCount, 1)
+    }
+
+    private func song(id: String) throws -> MusicSong {
+        try JSONDecoder().decode(
+            MusicSong.self,
+            from: Data("{\"id\":\"\(id)\",\"title\":\"Song \(id)\",\"audio_url\":\"https://cdn.example.com/\(id).mp3\"}".utf8)
+        )
+    }
+}
+
+@MainActor
+private final class PlaybackEngineSpy: MusicPlaybackEngine {
+    var onTimeUpdate: ((TimeInterval, TimeInterval) -> Void)?
+    var onPlaybackEnded: (() -> Void)?
+    var onBufferingChanged: ((Bool) -> Void)?
+    var onPlaybackFailed: ((String) -> Void)?
+    var onInterruptionBegan: (() -> Void)?
+    var onInterruptionEnded: ((Bool) -> Void)?
+    var onOutputDisconnected: (() -> Void)?
+    var loadedURL: URL?
+    var loadCallCount = 0
+    var playCallCount = 0
+    var pauseCallCount = 0
+
+    func load(url: URL) {
+        loadedURL = url
+        loadCallCount += 1
+    }
+
+    func play() {
+        playCallCount += 1
+    }
+
+    func pause() {
+        pauseCallCount += 1
+    }
+
+    func seek(to time: TimeInterval) {}
+}
