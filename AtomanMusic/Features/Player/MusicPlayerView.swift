@@ -139,6 +139,15 @@ struct MusicPlayerView: View {
                 .padding(20)
             }
             .background(Color.musicBackground)
+            .overlay(alignment: .top) {
+                if let message = player.queueActionMessage {
+                    MusicQueueActionBanner(message: message)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: player.queueActionMessage)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button {
@@ -155,6 +164,11 @@ struct MusicPlayerView: View {
                             .font(.caption.weight(.semibold))
                             .lineLimit(1)
                     }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    MusicRoutePickerView()
+                        .frame(width: 44, height: 44)
+                        .accessibilityLabel("AirPlay")
                 }
             }
             .sheet(isPresented: $player.isShowingLyrics) {

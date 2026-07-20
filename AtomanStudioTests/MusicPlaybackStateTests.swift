@@ -43,6 +43,24 @@ final class MusicPlaybackStateTests: XCTestCase {
         XCTAssertEqual(engine.playCallCount, 0)
     }
 
+    func testRestoresSavedShuffleOrderWithoutShufflingAgain() throws {
+        let songs = try (1...9).map { try song(id: String($0)) }
+        let store = PlaybackStateStoreSpy(
+            snapshot: MusicPlaybackSnapshot(
+                songs: songs,
+                currentSongID: "1",
+                currentTime: 0,
+                playbackMode: .shuffle
+            )
+        )
+        let player = MusicPlayer(engine: StatePlaybackEngineSpy(), stateStore: store)
+
+        player.playNext()
+
+        XCTAssertEqual(player.currentSong?.id, "2")
+        XCTAssertEqual(player.songs.map(\.id), songs.map(\.id))
+    }
+
     func testResumingRestoredQueueLoadsAndSeeksBeforePlaying() throws {
         let songs = try [song(id: "one")]
         let store = PlaybackStateStoreSpy(

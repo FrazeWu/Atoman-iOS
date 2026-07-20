@@ -30,6 +30,100 @@ final class MusicPlayerTests: XCTestCase {
         XCTAssertEqual(engine.playCallCount, 2)
     }
 
+    func testPlayNextSongUpdatesAndPersistsQueue() throws {
+        let engine = PlaybackEngineSpy()
+        let store = PlayerStateStoreSpy()
+        let player = MusicPlayer(engine: engine, stateStore: store)
+        let songs = try [song(id: "one"), song(id: "two"), song(id: "three")]
+        player.play(songs: songs, startingAt: "one")
+
+        player.playNext(songs[2])
+
+        XCTAssertEqual(player.songs.map(\.id), ["one", "three", "two"])
+        XCTAssertEqual(player.upcomingSongs.map(\.id), ["three", "two"])
+        XCTAssertEqual(store.snapshot?.songs.map(\.id), ["one", "three", "two"])
+        XCTAssertEqual(player.queueActionMessage, "已设为下一首")
+    }
+
+    func testEnqueueSongMovesItToQueueEndAndPersists() throws {
+        let engine = PlaybackEngineSpy()
+        let store = PlayerStateStoreSpy()
+        let player = MusicPlayer(engine: engine, stateStore: store)
+        let songs = try [song(id: "one"), song(id: "two"), song(id: "three")]
+        player.play(songs: songs, startingAt: "one")
+
+        player.enqueue(songs[1])
+
+        XCTAssertEqual(player.songs.map(\.id), ["one", "three", "two"])
+        XCTAssertEqual(store.snapshot?.songs.map(\.id), ["one", "three", "two"])
+        XCTAssertEqual(player.queueActionMessage, "已加入队列")
+    }
+
+    func testMoveUpcomingPersistsEditedOrder() throws {
+        let store = PlayerStateStoreSpy()
+        let player = MusicPlayer(engine: PlaybackEngineSpy(), stateStore: store)
+        let songs = try [song(id: "one"), song(id: "two"), song(id: "three"), song(id: "four")]
+        player.play(songs: songs, startingAt: "one")
+
+        player.moveUpcoming(from: 2, to: 0)
+
+        XCTAssertEqual(player.upcomingSongs.map(\.id), ["four", "two", "three"])
+        XCTAssertEqual(store.snapshot?.songs.map(\.id), ["one", "four", "two", "three"])
+    }
+
+    func testRemoveUpcomingPersistsShortenedQueue() throws {
+        let store = PlayerStateStoreSpy()
+        let player = MusicPlayer(engine: PlaybackEngineSpy(), stateStore: store)
+        let songs = try [song(id: "one"), song(id: "two"), song(id: "three")]
+        player.play(songs: songs, startingAt: "one")
+
+        player.removeUpcoming(at: 0)
+
+        XCTAssertEqual(player.upcomingSongs.map(\.id), ["three"])
+        XCTAssertEqual(store.snapshot?.songs.map(\.id), ["one", "three"])
+    }
+
+    func testClearUpcomingPersistsCurrentAndHistory() throws {
+        let store = PlayerStateStoreSpy()
+        let player = MusicPlayer(engine: PlaybackEngineSpy(), stateStore: store)
+        let songs = try [song(id: "one"), song(id: "two"), song(id: "three")]
+        player.play(songs: songs, startingAt: "two")
+
+        player.clearUpcoming()
+
+        XCTAssertEqual(player.songs.map(\.id), ["one", "two"])
+        XCTAssertEqual(player.currentSong?.id, "two")
+        XCTAssertTrue(player.upcomingSongs.isEmpty)
+        XCTAssertEqual(store.snapshot?.songs.map(\.id), ["one", "two"])
+    }
+
+    func testChangingPlaybackModePersistsVisibleQueueOrder() throws {
+        let store = PlayerStateStoreSpy()
+        let player = MusicPlayer(engine: PlaybackEngineSpy(), stateStore: store)
+        player.play(
+            songs: try [song(id: "one"), song(id: "two"), song(id: "three")],
+            startingAt: "one"
+        )
+
+        player.playbackMode = .shuffle
+
+        XCTAssertEqual(store.snapshot?.playbackMode, .shuffle)
+        XCTAssertEqual(store.snapshot?.songs.map(\.id), player.songs.map(\.id))
+    }
+
+    func testPlayQueuedSongKeepsExistingQueueOrder() throws {
+        let engine = PlaybackEngineSpy()
+        let player = MusicPlayer(engine: engine)
+        let songs = try [song(id: "one"), song(id: "two"), song(id: "three")]
+        player.play(songs: songs, startingAt: "one")
+
+        player.playQueuedSong(id: "three")
+
+        XCTAssertEqual(player.currentSong?.id, "three")
+        XCTAssertEqual(player.songs.map(\.id), ["one", "two", "three"])
+        XCTAssertEqual(engine.loadedURL?.absoluteString, "https://cdn.example.com/three.mp3")
+    }
+
     func testTogglePlaybackPausesAndResumes() throws {
         let engine = PlaybackEngineSpy()
         let player = MusicPlayer(engine: engine)
@@ -122,6 +216,14 @@ final class MusicPlayerTests: XCTestCase {
             from: Data("{\"id\":\"\(id)\",\"title\":\"Song \(id)\",\"audio_url\":\"https://cdn.example.com/\(id).mp3\"}".utf8)
         )
     }
+}
+
+@MainActor
+private final class PlayerStateStoreSpy: MusicPlaybackStateStore {
+    var snapshot: MusicPlaybackSnapshot?
+
+    func load() -> MusicPlaybackSnapshot? { snapshot }
+    func save(_ snapshot: MusicPlaybackSnapshot) { self.snapshot = snapshot }
 }
 
 @MainActor

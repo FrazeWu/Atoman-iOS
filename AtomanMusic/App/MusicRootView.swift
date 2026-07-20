@@ -47,6 +47,15 @@ private struct MusicMainTabView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .overlay(alignment: .top) {
+            if let message = player.queueActionMessage {
+                MusicQueueActionBanner(message: message)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: player.queueActionMessage)
         .sheet(isPresented: $player.isShowingPlayer) {
             MusicPlayerView()
                 .environment(environment)

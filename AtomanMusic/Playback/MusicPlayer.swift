@@ -14,11 +14,16 @@ public final class MusicPlayer {
     public private(set) var currentTime: TimeInterval = 0
     public private(set) var duration: TimeInterval = 0
     public private(set) var errorMessage: String?
+    public private(set) var queueActionMessage: String?
     public var isShowingPlayer = false
     public var isShowingLyrics = false
     public var isShowingQueue = false
     public var playbackMode: MusicPlaybackMode = .sequential {
-        didSet { queue.mode = playbackMode }
+        didSet {
+            queue.mode = playbackMode
+            synchronizeQueueState()
+            persistPlaybackState()
+        }
     }
 
     @ObservationIgnored private let engine: MusicPlaybackEngine
@@ -30,6 +35,16 @@ public final class MusicPlayer {
     @ObservationIgnored private var wasPlayingBeforeInterruption = false
     @ObservationIgnored private var isCurrentSongLoaded = false
     @ObservationIgnored private var lastPersistedTime: TimeInterval = 0
+    @ObservationIgnored private var queueMessageTask: Task<Void, Never>?
+
+    public var upcomingSongs: [MusicSong] {
+        guard let currentSong,
+              let currentIndex = songs.firstIndex(where: { $0.id == currentSong.id }),
+              currentIndex + 1 < songs.count else {
+            return []
+        }
+        return Array(songs[(currentIndex + 1)...])
+    }
 
     public convenience init(recordPlay: ((String) async -> Void)? = nil) {
         self.init(
@@ -93,10 +108,55 @@ public final class MusicPlayer {
     }
 
     public func play(songs: [MusicSong], startingAt songID: String? = nil) {
-        self.songs = songs
         queue.mode = playbackMode
         queue.load(songs, startingAt: songID)
-        currentSong = queue.currentSong
+        synchronizeQueueState()
+        loadCurrentSong()
+    }
+
+    public func playNext(_ song: MusicSong) {
+        guard currentSong != nil else {
+            play(songs: [song], startingAt: song.id)
+            return
+        }
+        guard queue.prioritize(song) else { return }
+        synchronizeQueueState()
+        persistPlaybackState()
+        showQueueActionMessage("已设为下一首")
+    }
+
+    public func enqueue(_ song: MusicSong) {
+        guard currentSong != nil else {
+            play(songs: [song], startingAt: song.id)
+            return
+        }
+        guard queue.enqueue(song) else { return }
+        synchronizeQueueState()
+        persistPlaybackState()
+        showQueueActionMessage("已加入队列")
+    }
+
+    public func moveUpcoming(from sourceIndex: Int, to destinationIndex: Int) {
+        guard queue.moveUpcoming(from: sourceIndex, to: destinationIndex) else { return }
+        synchronizeQueueState()
+        persistPlaybackState()
+    }
+
+    public func removeUpcoming(at index: Int) {
+        guard queue.removeUpcoming(at: index) else { return }
+        synchronizeQueueState()
+        persistPlaybackState()
+    }
+
+    public func clearUpcoming() {
+        guard queue.clearUpcoming() else { return }
+        synchronizeQueueState()
+        persistPlaybackState()
+    }
+
+    public func playQueuedSong(id: String) {
+        guard queue.select(songID: id) != nil else { return }
+        synchronizeQueueState()
         loadCurrentSong()
     }
 
@@ -153,7 +213,6 @@ public final class MusicPlayer {
         let modes = MusicPlaybackMode.allCases
         guard let index = modes.firstIndex(of: playbackMode) else { return }
         playbackMode = modes[(index + 1) % modes.count]
-        persistPlaybackState()
     }
 
     public func retryCurrentSong() {
@@ -218,14 +277,28 @@ public final class MusicPlayer {
         ))
     }
 
+    private func synchronizeQueueState() {
+        songs = queue.songs
+        currentSong = queue.currentSong
+    }
+
+    private func showQueueActionMessage(_ message: String) {
+        queueMessageTask?.cancel()
+        queueActionMessage = message
+        queueMessageTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            self?.queueActionMessage = nil
+        }
+    }
+
     private func restorePlaybackState() {
         guard let snapshot = stateStore?.load(),
               !snapshot.songs.isEmpty else { return }
-        songs = snapshot.songs
         playbackMode = snapshot.playbackMode
         queue.mode = snapshot.playbackMode
-        queue.load(snapshot.songs, startingAt: snapshot.currentSongID)
-        currentSong = queue.currentSong
+        queue.load(snapshot.songs, startingAt: snapshot.currentSongID, preservingOrder: true)
+        synchronizeQueueState()
         currentTime = max(0, snapshot.currentTime)
         lastPersistedTime = currentTime
         isPlaying = false

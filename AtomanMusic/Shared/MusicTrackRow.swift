@@ -40,6 +40,22 @@ struct MusicTrackRow: View {
 
             Menu {
                 Button {
+                    environment.player.playNext(song)
+                } label: {
+                    Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward")
+                }
+                .disabled(isCurrentSong)
+
+                Button {
+                    environment.player.enqueue(song)
+                } label: {
+                    Label("加入队列", systemImage: "text.badge.plus")
+                }
+                .disabled(isCurrentSong)
+
+                Divider()
+
+                Button {
                     toggleFavorite()
                 } label: {
                     Label(isFavorite ? "取消收藏" : "收藏歌曲", systemImage: isFavorite ? "heart.slash" : "heart")
@@ -65,6 +81,10 @@ struct MusicTrackRow: View {
 
     private var isFavorite: Bool {
         environment.favoriteSongIDs.contains(song.id)
+    }
+
+    private var isCurrentSong: Bool {
+        environment.player.currentSong?.id == song.id
     }
 
     private func toggleFavorite() {

@@ -24,6 +24,14 @@ final class MusicViewsSmokeTests: XCTestCase {
         _ = MusicAccountButton()
         _ = MusicAccountSheet()
     }
+
+    func testQueueActionBannerCanBeCreated() {
+        _ = MusicQueueActionBanner(message: "已加入队列")
+    }
+
+    func testRoutePickerCanBeCreated() {
+        _ = MusicRoutePickerView()
+    }
 }
 
 @MainActor
