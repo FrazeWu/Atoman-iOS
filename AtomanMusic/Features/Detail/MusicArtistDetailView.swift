@@ -15,7 +15,11 @@ struct MusicArtistDetailView: View {
                 } else if let errorMessage {
                     ContentUnavailableView(errorMessage, systemImage: "exclamationmark.triangle")
                 } else if let artist {
-                    MusicArtworkView(url: artist.resolvedImageURL, cornerRadius: 140)
+                    MusicArtworkView(
+                        url: artist.resolvedImageURL,
+                        fallbackURL: artist.fallbackImageURL,
+                        cornerRadius: 140
+                    )
                         .frame(maxWidth: 240)
                         .clipShape(Circle())
                     HStack(spacing: 12) {
@@ -55,7 +59,7 @@ struct MusicArtistDetailView: View {
                 }
             }
             .padding(20)
-            .padding(.bottom, environment.player.currentSong == nil ? 24 : 112)
+            .padding(.bottom, 24)
         }
         .background(Color.musicBackground)
         .navigationTitle("艺人")

@@ -22,6 +22,25 @@ final class LoginViewModelTests: XCTestCase {
         XCTAssertEqual(vm.errorMessage, "请输入用户名或邮箱")
     }
 
+    func testLoginCanSubmitOnlyWithCompleteCredentials() {
+        let vm = LoginViewModel(
+            client: APIClient(baseURL: URL(string: "https://example.com/api")!),
+            authSession: AuthSessionStore(token: nil)
+        )
+
+        XCTAssertFalse(vm.canSubmit)
+
+        vm.username = "  "
+        vm.password = "secret"
+        XCTAssertFalse(vm.canSubmit)
+
+        vm.username = "alice"
+        XCTAssertTrue(vm.canSubmit)
+
+        vm.isLoading = true
+        XCTAssertFalse(vm.canSubmit)
+    }
+
     func testSuccessfulLoginStoresAuthenticatedUser() async {
         URLProtocolStub.requestHandler = { request in
             Self.response(request, body: Self.sessionBody)

@@ -5,6 +5,15 @@ public enum MusicPlaybackMode: String, CaseIterable, Codable, Sendable {
     case repeatAll
     case repeatOne
     case shuffle
+
+    public var accessibilityName: String {
+        switch self {
+        case .sequential: "顺序播放"
+        case .repeatAll: "列表循环"
+        case .repeatOne: "单曲循环"
+        case .shuffle: "随机播放"
+        }
+    }
 }
 
 public struct MusicPlaybackQueue: Sendable {

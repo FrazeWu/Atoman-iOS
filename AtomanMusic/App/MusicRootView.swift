@@ -39,14 +39,6 @@ private struct MusicMainTabView: View {
             .tabItem { Label("资料库", systemImage: "books.vertical.fill") }
         }
         .background(Color.musicBackground)
-        .overlay(alignment: .bottom) {
-            if player.currentSong != nil {
-                MiniMusicPlayerView()
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 49)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
         .overlay(alignment: .top) {
             if let message = player.queueActionMessage {
                 MusicQueueActionBanner(message: message)
@@ -90,6 +82,15 @@ private struct MusicMainTabView: View {
                         MusicAccountButton()
                     }
                 }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if environment.player.currentSong != nil {
+                MiniMusicPlayerView()
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.musicBackground)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
     }
 }

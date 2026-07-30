@@ -34,8 +34,10 @@ struct MusicLoginView: View {
                             .font(.subheadline.weight(.semibold))
                         TextField("输入用户名或邮箱", text: $viewModel.username)
                             .textContentType(.username)
-                            .textFieldStyle(.roundedBorder)
                             .submitLabel(.next)
+                            .padding(.horizontal, 12)
+                            .frame(minHeight: 44)
+                            .background(loginFieldBackground)
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -56,12 +58,14 @@ struct MusicLoginView: View {
                                 showsPassword.toggle()
                             } label: {
                                 Image(systemName: showsPassword ? "eye.slash" : "eye")
+                                    .font(.system(size: 18, weight: .medium))
                                     .frame(width: 44, height: 44)
                             }
                             .accessibilityLabel(showsPassword ? "隐藏密码" : "显示密码")
                         }
                         .padding(.leading, 12)
-                        .background(Color.musicSurface, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .frame(minHeight: 44)
+                        .background(loginFieldBackground)
                     }
                 }
 
@@ -83,7 +87,7 @@ struct MusicLoginView: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(viewModel.isLoading)
+                .disabled(!viewModel.canSubmit)
 
                 HStack(spacing: 24) {
                     Link("注册账号", destination: registrationURL)
@@ -98,11 +102,17 @@ struct MusicLoginView: View {
     }
 
     private func login() {
-        guard !viewModel.isLoading else { return }
+        guard viewModel.canSubmit else { return }
         Task {
             if await viewModel.login() {
                 await onLogin()
             }
         }
+    }
+
+    private var loginFieldBackground: some View {
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+            .fill(Color.musicSurface)
+            .stroke(.white.opacity(0.12), lineWidth: 1)
     }
 }

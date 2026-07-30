@@ -9,6 +9,12 @@ public final class LoginViewModel {
     public var isLoading = false
     public var errorMessage: String?
 
+    public var canSubmit: Bool {
+        !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !password.isEmpty
+            && !isLoading
+    }
+
     private let api: AuthAPI
     private let authSession: AuthSessionStore
 

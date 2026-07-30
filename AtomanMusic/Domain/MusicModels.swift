@@ -23,6 +23,10 @@ public struct MusicArtistDetail: Codable, Hashable, Identifiable, Sendable {
         imageURL?.isEmpty == false ? imageURL : albums.lazy.compactMap(\.resolvedCoverURL).first
     }
 
+    public var fallbackImageURL: String? {
+        albums.lazy.compactMap(\.resolvedCoverURL).first
+    }
+
     enum CodingKeys: String, CodingKey {
         case id, name, bio, albums
         case imageURL = "image_url"

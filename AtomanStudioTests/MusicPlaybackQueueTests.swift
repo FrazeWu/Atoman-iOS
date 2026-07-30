@@ -3,6 +3,13 @@ import XCTest
 @testable import AtomanMusic
 
 final class MusicPlaybackQueueTests: XCTestCase {
+    func testPlaybackModesHaveChineseAccessibilityNames() {
+        XCTAssertEqual(MusicPlaybackMode.sequential.accessibilityName, "顺序播放")
+        XCTAssertEqual(MusicPlaybackMode.repeatAll.accessibilityName, "列表循环")
+        XCTAssertEqual(MusicPlaybackMode.repeatOne.accessibilityName, "单曲循环")
+        XCTAssertEqual(MusicPlaybackMode.shuffle.accessibilityName, "随机播放")
+    }
+
     func testLoadsQueueAtRequestedSongAndMovesSequentially() throws {
         let songs = try [song(id: "one"), song(id: "two"), song(id: "three")]
         var queue = MusicPlaybackQueue()

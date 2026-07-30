@@ -2,10 +2,12 @@ import SwiftUI
 
 public struct MusicArtworkView: View {
     private let url: String?
+    private let fallbackURL: String?
     private let cornerRadius: CGFloat
 
-    public init(url: String?, cornerRadius: CGFloat = 6) {
+    public init(url: String?, fallbackURL: String? = nil, cornerRadius: CGFloat = 6) {
         self.url = url
+        self.fallbackURL = fallbackURL == url ? nil : fallbackURL
         self.cornerRadius = cornerRadius
     }
 
@@ -21,7 +23,7 @@ public struct MusicArtworkView: View {
                     case .success(let image):
                         image.resizable().scaledToFill()
                     case .failure:
-                        artworkFallback
+                        fallbackArtwork
                     @unknown default:
                         artworkFallback
                     }
@@ -40,6 +42,28 @@ public struct MusicArtworkView: View {
             Image(systemName: "music.note")
                 .font(.title2)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var fallbackArtwork: some View {
+        if let imageURL = fallbackURL.flatMap(URL.init(string:)) {
+            AsyncImage(url: imageURL) { phase in
+                switch phase {
+                case .empty:
+                    artworkPlaceholder {
+                        ProgressView().controlSize(.small)
+                    }
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                case .failure:
+                    artworkFallback
+                @unknown default:
+                    artworkFallback
+                }
+            }
+        } else {
+            artworkFallback
         }
     }
 

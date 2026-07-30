@@ -22,7 +22,7 @@ struct MusicSearchView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, environment.player.currentSong == nil ? 24 : 112)
+            .padding(.bottom, 24)
         }
         .background(Color.musicBackground)
         .navigationTitle("搜索")

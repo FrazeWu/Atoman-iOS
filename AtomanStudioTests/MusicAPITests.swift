@@ -172,7 +172,7 @@ final class MusicAPITests: XCTestCase {
             switch request.url?.path {
             case "/api/v1/music/artists/artist-1":
                 return Self.response(request, body: """
-                {"data":{"id":"artist-1","name":"Echo Artist","albums":[{"id":"album-1","title":"Echo Album","cover_url":"https://cdn.example.com/album.jpg"}]}}
+                {"data":{"id":"artist-1","name":"Echo Artist","image_url":"https://external.example.com/artist.jpg","albums":[{"id":"album-1","title":"Echo Album","cover_url":"https://cdn.example.com/album.jpg"}]}}
                 """)
             case "/api/v1/music/playlists/playlist-1":
                 return Self.response(request, body: """
@@ -191,7 +191,8 @@ final class MusicAPITests: XCTestCase {
         let playlist = try await api.playlist(id: "playlist-1")
 
         XCTAssertEqual(artist.albums.first?.title, "Echo Album")
-        XCTAssertEqual(artist.resolvedImageURL, "https://cdn.example.com/album.jpg")
+        XCTAssertEqual(artist.resolvedImageURL, "https://external.example.com/artist.jpg")
+        XCTAssertEqual(artist.fallbackImageURL, "https://cdn.example.com/album.jpg")
         XCTAssertEqual(playlist.songs.first?.title, "Echo Song")
     }
 

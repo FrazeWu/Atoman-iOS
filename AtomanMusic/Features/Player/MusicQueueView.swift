@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MusicQueueView: View {
     @Environment(MusicAppEnvironment.self) private var environment
+    @Environment(\.dismiss) private var dismiss
 #if os(iOS)
     @Environment(\.editMode) private var editMode
 #endif
@@ -39,6 +40,15 @@ struct MusicQueueView: View {
             .background(Color.musicBackground)
             .navigationTitle("播放队列")
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("关闭播放队列")
+                }
                 ToolbarItemGroup(placement: .primaryAction) {
 #if os(iOS)
                     if environment.player.upcomingSongs.count > 1 {

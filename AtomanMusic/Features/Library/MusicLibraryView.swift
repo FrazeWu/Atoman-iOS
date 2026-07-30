@@ -59,7 +59,7 @@ struct MusicLibraryView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, environment.player.currentSong == nil ? 24 : 112)
+            .padding(.bottom, 24)
         }
         .refreshable { await load() }
     }

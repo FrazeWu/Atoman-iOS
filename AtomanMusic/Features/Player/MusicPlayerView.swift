@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MusicPlayerView: View {
     @Environment(MusicAppEnvironment.self) private var environment
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     var body: some View {
         @Bindable var player = environment.player
@@ -11,7 +12,7 @@ struct MusicPlayerView: View {
                 VStack(spacing: 22) {
                     if let song = player.currentSong {
                         MusicArtworkView(url: song.resolvedCoverURL)
-                            .frame(maxWidth: 360)
+                            .frame(maxWidth: verticalSizeClass == .compact ? 220 : 360)
                             .padding(.horizontal, 24)
 
                         if player.isBuffering {
@@ -66,6 +67,7 @@ struct MusicPlayerView: View {
                                 ),
                                 in: 0...max(player.duration, 1)
                             )
+                            .accessibilityLabel("播放进度")
                             HStack {
                                 Text(player.currentTime.musicTimestamp)
                                 Spacer()
@@ -82,7 +84,9 @@ struct MusicPlayerView: View {
                                     .foregroundStyle(player.playbackMode == .sequential ? .secondary : Color.musicAccent)
                                     .frame(width: 44, height: 44)
                             }
-                            .accessibilityLabel("切换播放模式")
+                            .accessibilityLabel("播放模式")
+                            .accessibilityValue(player.playbackMode.accessibilityName)
+                            .accessibilityHint("轻点切换播放模式")
                             Spacer()
                             Button { player.playPrevious() } label: {
                                 Image(systemName: "backward.end.fill").font(.title2)
@@ -97,6 +101,7 @@ struct MusicPlayerView: View {
                                     .frame(width: 62, height: 62)
                                     .background(.primary, in: Circle())
                             }
+                            .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
                             Spacer()
                             Button { player.playNext() } label: {
                                 Image(systemName: "forward.end.fill").font(.title2)
@@ -174,10 +179,12 @@ struct MusicPlayerView: View {
             .sheet(isPresented: $player.isShowingLyrics) {
                 MusicLyricsView()
                     .environment(environment)
+                    .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $player.isShowingQueue) {
                 MusicQueueView()
                     .environment(environment)
+                    .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: playerAuthenticationBinding, onDismiss: {
                 environment.authentication.dismiss()

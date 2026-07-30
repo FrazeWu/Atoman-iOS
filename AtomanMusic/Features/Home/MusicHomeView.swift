@@ -30,7 +30,7 @@ struct MusicHomeView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
-            .padding(.bottom, environment.player.currentSong == nil ? 24 : 112)
+            .padding(.bottom, 24)
         }
         .background(Color.musicBackground)
         .navigationTitle(greeting)
