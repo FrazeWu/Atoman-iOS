@@ -43,8 +43,18 @@ public final class MusicAppEnvironment {
         }
         if authSession.isAuthenticated {
             await refreshFavorites()
+            await restoreRemotePlayback()
         } else {
             clearUserState()
+        }
+    }
+
+    public func restoreRemotePlayback() async {
+        guard authSession.isAuthenticated, !player.isPlaying else { return }
+        let tokenBeforeFetch = authSession.token
+        if let snapshot = try? await api.playbackSession() {
+            guard authSession.isAuthenticated, authSession.token == tokenBeforeFetch else { return }
+            player.restoreRemotePlayback(snapshot)
         }
     }
 
@@ -108,6 +118,7 @@ public final class MusicAppEnvironment {
     public func completeAuthentication() async {
         guard authSession.isAuthenticated, authentication.isPresented else { return }
         await refreshFavorites()
+        await restoreRemotePlayback()
         guard let action = authentication.takePendingAction() else {
             authentication.dismiss(clearPendingAction: false)
             return
@@ -192,9 +203,13 @@ public final class MusicAppEnvironment {
             authSession.invalidate()
         }
         let api = MusicAPI(client: client, authSession: authSession)
-        let player = MusicPlayer { songID in
-            try? await api.recordPlay(songID: songID)
-        }
+        let player = MusicPlayer(
+            recordPlay: { songID in try? await api.recordPlay(songID: songID) },
+            syncPlayback: { snapshot in
+                guard authSession.isAuthenticated else { return }
+                try? await api.savePlaybackSnapshot(snapshot)
+            }
+        )
         return MusicAppEnvironment(api: api, authSession: authSession, player: player)
     }
 }

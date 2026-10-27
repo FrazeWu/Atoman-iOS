@@ -125,6 +125,51 @@ public struct MusicAPI {
         try await list(path: "music/history", pageSize: pageSize)
     }
 
+    public func playbackSession() async throws -> MusicPlaybackSnapshot? {
+        let (data, response) = try await client.request(
+            path: "music/playback-session", token: authSession.token
+        )
+        guard response.statusCode == 200 else { throw URLError(.badServerResponse) }
+        let session = try JSONDecoder().decode(MusicEnvelope<MusicRemotePlaybackSession?>.self, from: data).data
+        guard let session, !session.queue.isEmpty,
+              session.queue.contains(where: { $0.id == session.currentSongID }) else { return nil }
+        let mode: MusicPlaybackMode = switch session.playbackMode {
+        case "single": .repeatOne
+        case "random": .shuffle
+        default: .repeatAll
+        }
+        return MusicPlaybackSnapshot(songs: session.queue, currentSongID: session.currentSongID,
+                                     currentTime: session.positionSeconds, playbackMode: mode)
+    }
+
+    public func savePlaybackSnapshot(_ snapshot: MusicPlaybackSnapshot) async throws {
+        // The server accepts only real catalog UUIDs, never podcast/local tracks.
+        let songIDs = snapshot.songs.map(\.id)
+        guard !songIDs.isEmpty, songIDs.count <= 200,
+              songIDs.contains(snapshot.currentSongID),
+              songIDs.allSatisfy({ UUID(uuidString: $0) != nil }),
+              Set(songIDs).count == songIDs.count else { return }
+        let mode: String = switch snapshot.playbackMode {
+        case .repeatOne: "single"
+        case .shuffle: "random"
+        case .repeatAll, .sequential: "loop"
+        }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let timestamp = formatter.string(from: Date())
+        let session = MusicPlaybackSessionWrite(songIDs: songIDs, currentSongID: snapshot.currentSongID,
+                                                 positionSeconds: snapshot.currentTime, playbackMode: mode,
+                                                 reportedAt: timestamp)
+        let payload = try JSONEncoder().encode(session)
+        try await send(path: "music/playback-session", method: "PUT", body: payload, expectedStatus: 200)
+        let progress = MusicPlaybackProgressWrite(songID: snapshot.currentSongID,
+                                                   positionSeconds: snapshot.currentTime,
+                                                   durationSeconds: snapshot.songs.first(where: { $0.id == snapshot.currentSongID })?.durationSeconds ?? 0,
+                                                   reportedAt: timestamp)
+        try await send(path: "music/playback-progress", method: "PUT",
+                       body: JSONEncoder().encode(progress), expectedStatus: 200)
+    }
+
     public func recordPlay(songID: String) async throws {
         let body = try JSONEncoder().encode(MusicSongIDRequest(songID: songID))
         try await send(path: "music/plays", method: "POST", body: body, expectedStatus: 200)
@@ -288,6 +333,47 @@ private struct MusicListEnvelope<Value: Decodable>: Decodable {
 private struct MusicListMeta: Decodable {
     let hasMore: Bool
     enum CodingKeys: String, CodingKey { case hasMore = "has_more" }
+}
+
+private struct MusicRemotePlaybackSession: Decodable {
+    let queue: [MusicSong]
+    let currentSongID: String
+    let positionSeconds: Double
+    let playbackMode: String
+    enum CodingKeys: String, CodingKey {
+        case queue
+        case currentSongID = "current_song_id"
+        case positionSeconds = "position_seconds"
+        case playbackMode = "playback_mode"
+    }
+}
+
+private struct MusicPlaybackSessionWrite: Encodable {
+    let songIDs: [String]
+    let currentSongID: String
+    let positionSeconds: Double
+    let playbackMode: String
+    let reportedAt: String
+    enum CodingKeys: String, CodingKey {
+        case songIDs = "song_ids"
+        case currentSongID = "current_song_id"
+        case positionSeconds = "position_seconds"
+        case playbackMode = "playback_mode"
+        case reportedAt = "reported_at"
+    }
+}
+
+private struct MusicPlaybackProgressWrite: Encodable {
+    let songID: String
+    let positionSeconds: Double
+    let durationSeconds: Int
+    let reportedAt: String
+    enum CodingKeys: String, CodingKey {
+        case songID = "song_id"
+        case positionSeconds = "position_seconds"
+        case durationSeconds = "duration_seconds"
+        case reportedAt = "reported_at"
+    }
 }
 
 private struct MusicSongIDRequest: Encodable {

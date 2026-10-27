@@ -29,12 +29,14 @@ public final class MusicPlayer {
     @ObservationIgnored private let engine: MusicPlaybackEngine
     @ObservationIgnored private let recordPlay: ((String) async -> Void)?
     @ObservationIgnored private let stateStore: MusicPlaybackStateStore?
+    @ObservationIgnored private let syncPlayback: ((MusicPlaybackSnapshot) async -> Void)?
     @ObservationIgnored private let nowPlayingPublisher: MusicNowPlayingPublishing?
     @ObservationIgnored private var queue = MusicPlaybackQueue()
     @ObservationIgnored private var recordPolicy = MusicPlaybackRecordPolicy()
     @ObservationIgnored private var wasPlayingBeforeInterruption = false
     @ObservationIgnored private var isCurrentSongLoaded = false
     @ObservationIgnored private var lastPersistedTime: TimeInterval = 0
+    @ObservationIgnored private var restoringPlayback = false
     @ObservationIgnored private var queueMessageTask: Task<Void, Never>?
 
     public var upcomingSongs: [MusicSong] {
@@ -46,10 +48,11 @@ public final class MusicPlayer {
         return Array(songs[(currentIndex + 1)...])
     }
 
-    public convenience init(recordPlay: ((String) async -> Void)? = nil) {
+    public convenience init(recordPlay: ((String) async -> Void)? = nil, syncPlayback: ((MusicPlaybackSnapshot) async -> Void)? = nil) {
         self.init(
             engine: AVMusicPlaybackEngine(),
             recordPlay: recordPlay,
+            syncPlayback: syncPlayback,
             stateStore: UserDefaultsMusicPlaybackStateStore(),
             nowPlayingPublisher: SystemMusicNowPlayingPublisher()
         )
@@ -58,11 +61,13 @@ public final class MusicPlayer {
     public init(
         engine: MusicPlaybackEngine,
         recordPlay: ((String) async -> Void)? = nil,
+        syncPlayback: ((MusicPlaybackSnapshot) async -> Void)? = nil,
         stateStore: MusicPlaybackStateStore? = nil,
         nowPlayingPublisher: MusicNowPlayingPublishing? = nil
     ) {
         self.engine = engine
         self.recordPlay = recordPlay
+        self.syncPlayback = syncPlayback
         self.stateStore = stateStore
         self.nowPlayingPublisher = nowPlayingPublisher
         engine.onTimeUpdate = { [weak self] currentTime, duration in
@@ -292,9 +297,28 @@ public final class MusicPlayer {
         }
     }
 
+    // Remote state is applied only while idle, never interrupting active listening.
+    public func restoreRemotePlayback(_ snapshot: MusicPlaybackSnapshot) {
+        guard !isPlaying, !snapshot.songs.isEmpty,
+              snapshot.songs.contains(where: { $0.id == snapshot.currentSongID }) else { return }
+        restoringPlayback = true
+        defer { restoringPlayback = false }
+        playbackMode = snapshot.playbackMode
+        queue.mode = snapshot.playbackMode
+        queue.load(snapshot.songs, startingAt: snapshot.currentSongID, preservingOrder: true)
+        synchronizeQueueState()
+        currentTime = max(0, snapshot.currentTime)
+        lastPersistedTime = currentTime
+        isCurrentSongLoaded = false
+        stateStore?.save(snapshot)
+        updateNowPlayingInfo()
+    }
+
     private func restorePlaybackState() {
         guard let snapshot = stateStore?.load(),
               !snapshot.songs.isEmpty else { return }
+        restoringPlayback = true
+        defer { restoringPlayback = false }
         playbackMode = snapshot.playbackMode
         queue.mode = snapshot.playbackMode
         queue.load(snapshot.songs, startingAt: snapshot.currentSongID, preservingOrder: true)
@@ -307,13 +331,15 @@ public final class MusicPlayer {
     }
 
     private func persistPlaybackState() {
-        guard let currentSong else { return }
-        stateStore?.save(MusicPlaybackSnapshot(
+        guard !restoringPlayback, let currentSong else { return }
+        let snapshot = MusicPlaybackSnapshot(
             songs: songs,
             currentSongID: currentSong.id,
             currentTime: currentTime,
             playbackMode: playbackMode
-        ))
+        )
+        stateStore?.save(snapshot)
+        if let syncPlayback { Task { await syncPlayback(snapshot) } }
     }
 
 #if os(iOS)

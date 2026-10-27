@@ -62,6 +62,40 @@ final class MusicAPITests: XCTestCase {
         XCTAssertEqual(playlists.map(\.name), ["List 1", "List 2"])
     }
 
+    func testPlaybackSessionLoadsSavedQueueWithoutMutation() async throws {
+        let api = makeAPI(token: "token-1") { request in
+            XCTAssertEqual(request.url?.path, "/api/v1/music/playback-session")
+            XCTAssertEqual(request.httpMethod, "GET")
+            return Self.response(request, body: """
+            {"data":{"queue":[{"id":"song-1","title":"From Desktop","audio_url":"https://cdn.example.com/song.mp3"}],"current_song_id":"song-1","position_seconds":47.25,"playback_mode":"single","updated_at":"2026-10-27T10:00:00Z"}}
+            """)
+        }
+        let response = try await api.playbackSession()
+        let state = try XCTUnwrap(response)
+        XCTAssertEqual(state.currentSongID, "song-1")
+        XCTAssertEqual(state.currentTime, 47.25)
+        XCTAssertEqual(state.playbackMode, .repeatOne)
+    }
+
+    func testPlaybackSessionWritesValidCatalogQueueAndProgress() async throws {
+        var requests: [URLRequest] = []
+        let api = makeAPI(token: "token-1") { request in
+            requests.append(request)
+            return Self.response(request, body: "{\"data\":{}}")
+        }
+        let state = MusicPlaybackSnapshot(
+            songs: [try XCTUnwrap(JSONDecoder().decode([MusicSong].self, from: Data("""
+            [{"id":"11111111-1111-4111-8111-111111111111","title":"QA","audio_url":"https://cdn.example.com/qa.mp3"}]
+            """.utf8)).first)],
+            currentSongID: "11111111-1111-4111-8111-111111111111", currentTime: 12.5,
+            playbackMode: .repeatAll
+        )
+        try await api.savePlaybackSnapshot(state)
+        XCTAssertEqual(requests.map { $0.url!.path }, ["/api/v1/music/playback-session", "/api/v1/music/playback-progress"])
+        XCTAssertTrue(requests.allSatisfy { $0.httpMethod == "PUT" })
+        XCTAssertEqual(requests.count, 2)
+    }
+
     func testDiscoverUsesCurrentCatalogEndpointsForGuest() async throws {
         var requestedPaths: [String] = []
         let api = makeAPI { request in
