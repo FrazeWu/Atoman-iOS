@@ -4,6 +4,25 @@ import XCTest
 
 @MainActor
 final class MusicPlayerTests: XCTestCase {
+    func testRestoreRemoteQueueDoesNotAutoplayOrPublishOldState() throws {
+        let engine = PlaybackEngineSpy()
+        let store = PlayerStateStoreSpy()
+        var syncCount = 0
+        let player = MusicPlayer(engine: engine, syncPlayback: { _ in syncCount += 1 }, stateStore: store)
+        let songs = try [song(id: "one"), song(id: "two")]
+        player.restoreRemotePlayback(MusicPlaybackSnapshot(
+            songs: songs, currentSongID: "two", currentTime: 72,
+            playbackMode: .repeatOne
+        ))
+        XCTAssertEqual(player.currentSong?.id, "two")
+        XCTAssertEqual(player.currentTime, 72)
+        XCTAssertEqual(player.playbackMode, .repeatOne)
+        XCTAssertFalse(player.isPlaying)
+        XCTAssertEqual(engine.playCallCount, 0)
+        XCTAssertEqual(store.snapshot?.currentSongID, "two")
+        XCTAssertEqual(syncCount, 0)
+    }
+
     func testPlayQueueLoadsRequestedSongAndStartsEngine() throws {
         let engine = PlaybackEngineSpy()
         let player = MusicPlayer(engine: engine)

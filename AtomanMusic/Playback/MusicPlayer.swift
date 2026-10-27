@@ -29,6 +29,7 @@ public final class MusicPlayer {
     @ObservationIgnored private let engine: MusicPlaybackEngine
     @ObservationIgnored private let recordPlay: ((String) async -> Void)?
     @ObservationIgnored private let stateStore: MusicPlaybackStateStore?
+    @ObservationIgnored private let legacySyncPlayback: ((MusicPlaybackSnapshot) async -> Void)?
     @ObservationIgnored private let nowPlayingPublisher: MusicNowPlayingPublishing?
     @ObservationIgnored private var queue = MusicPlaybackQueue()
     @ObservationIgnored private var recordPolicy = MusicPlaybackRecordPolicy()
@@ -53,10 +54,11 @@ public final class MusicPlayer {
         return Array(songs[(currentIndex + 1)...])
     }
 
-    public convenience init(recordPlay: ((String) async -> Void)? = nil) {
+    public convenience init(recordPlay: ((String) async -> Void)? = nil, syncPlayback: ((MusicPlaybackSnapshot) async -> Void)? = nil) {
         self.init(
             engine: AVMusicPlaybackEngine(),
             recordPlay: recordPlay,
+            syncPlayback: syncPlayback,
             stateStore: UserDefaultsMusicPlaybackStateStore(),
             nowPlayingPublisher: SystemMusicNowPlayingPublisher()
         )
@@ -65,11 +67,13 @@ public final class MusicPlayer {
     public init(
         engine: MusicPlaybackEngine,
         recordPlay: ((String) async -> Void)? = nil,
+        syncPlayback: ((MusicPlaybackSnapshot) async -> Void)? = nil,
         stateStore: MusicPlaybackStateStore? = nil,
         nowPlayingPublisher: MusicNowPlayingPublishing? = nil
     ) {
         self.engine = engine
         self.recordPlay = recordPlay
+        self.legacySyncPlayback = syncPlayback
         self.stateStore = stateStore
         self.nowPlayingPublisher = nowPlayingPublisher
         engine.onTimeUpdate = { [weak self] currentTime, duration in
@@ -171,6 +175,26 @@ public final class MusicPlayer {
         updateNowPlayingInfo()
         applyingRemoteSession = false
         return true
+    }
+
+    // Backward-compatible snapshot restore, with the same no-autoplay and
+    // no-overwrite guarantees as the current wire-format session restore.
+    public func restoreRemotePlayback(_ snapshot: MusicPlaybackSnapshot) {
+        guard !didInteractLocally, !isPlaying, !isCurrentSongLoaded,
+              !snapshot.songs.isEmpty,
+              snapshot.songs.contains(where: { $0.id == snapshot.currentSongID }) else { return }
+        applyingRemoteSession = true
+        defer { applyingRemoteSession = false }
+        playbackMode = snapshot.playbackMode
+        queue.mode = snapshot.playbackMode
+        queue.load(snapshot.songs, startingAt: snapshot.currentSongID, preservingOrder: true)
+        synchronizeQueueState()
+        currentTime = max(0, snapshot.currentTime)
+        lastPersistedTime = currentTime
+        isPlaying = false
+        isCurrentSongLoaded = false
+        persistPlaybackState()
+        updateNowPlayingInfo()
     }
 
     public func flushRemotePlayback() {
@@ -404,6 +428,9 @@ public final class MusicPlayer {
             playbackMode: playbackMode
         )
         if !suppressSignedOutSnapshot { stateStore?.save(snapshot) }
+        if didInteractLocally, !applyingRemoteSession, let legacySyncPlayback {
+            Task { await legacySyncPlayback(snapshot) }
+        }
         guard didInteractLocally, !applyingRemoteSession,
               let remoteSessionSave else { return }
         let now = Date()

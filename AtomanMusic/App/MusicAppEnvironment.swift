@@ -54,7 +54,7 @@ public final class MusicAppEnvironment {
         guard let activeToken = authSession.token, !activeToken.isEmpty else { return }
         // Read the server first; registering save callbacks before the restore
         // would otherwise risk overwriting another device's latest session.
-        let remote = try? await api.playbackSession()
+        let remote = try? await api.remotePlaybackSession()
         guard authSession.token == activeToken else { return }
         if let remote { player.restoreRemoteSession(remote) }
         let api = self.api

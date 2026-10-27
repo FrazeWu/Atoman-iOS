@@ -183,12 +183,39 @@ public struct MusicAPI {
         try await list(path: "music/history", pageSize: pageSize)
     }
 
-    public func playbackSession() async throws -> MusicRemotePlaybackSession? {
+    public func remotePlaybackSession() async throws -> MusicRemotePlaybackSession? {
         let (data, response) = try await client.request(
             path: "music/playback-session", token: authSession.token
         )
         guard response.statusCode == 200 else { throw URLError(.badServerResponse) }
         return try JSONDecoder().decode(MusicEnvelope<MusicRemotePlaybackSession?>.self, from: data).data
+    }
+
+    // Preserve the original snapshot-based SDK contract for existing callers.
+    public func playbackSession() async throws -> MusicPlaybackSnapshot? {
+        guard let session = try await remotePlaybackSession(),
+              !session.queue.isEmpty,
+              session.queue.contains(where: { $0.id == session.currentSongID }) else { return nil }
+        let mode: MusicPlaybackMode
+        switch session.playbackMode {
+        case "single": mode = .repeatOne
+        case "random": mode = .shuffle
+        default: mode = .repeatAll
+        }
+        return MusicPlaybackSnapshot(
+            songs: session.queue, currentSongID: session.currentSongID,
+            currentTime: session.positionSeconds, playbackMode: mode
+        )
+    }
+
+    public func savePlaybackSnapshot(_ snapshot: MusicPlaybackSnapshot) async throws {
+        try await savePlaybackSession(snapshot)
+        guard let song = snapshot.songs.first(where: { $0.id == snapshot.currentSongID }) else { return }
+        try await savePlaybackProgress(
+            songID: snapshot.currentSongID,
+            position: snapshot.currentTime,
+            duration: Double(song.durationSeconds ?? 0), completed: false
+        )
     }
 
     public func savePlaybackSession(_ snapshot: MusicPlaybackSnapshot, reportedAt: Date = Date()) async throws {
