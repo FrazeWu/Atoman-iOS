@@ -283,6 +283,23 @@ public struct MusicDiscoverItem: Codable, Hashable, Identifiable, Sendable {
         }
     }
 
+    public init(album: MusicAlbum) {
+        self.init(
+            type: .album, id: album.id, title: album.title,
+            imageURL: album.resolvedCoverURL,
+            targetPath: "/music/album/\(album.id)", artists: album.artists,
+            songCount: album.songs.count
+        )
+    }
+
+    public init(playlist: MusicPlaylist) {
+        self.init(
+            type: .playlist, id: playlist.id, title: playlist.name,
+            summary: playlist.description, imageURL: playlist.coverURL,
+            targetPath: "/music/playlist/\(playlist.id)", songCount: playlist.songCount
+        )
+    }
+
     public init(
         type: MusicDiscoverType,
         id: String,
@@ -341,6 +358,16 @@ public struct MusicSearchMeta: Codable, Hashable, Sendable {
     public var hasNextPage: Bool { hasMore.values.contains(true) }
 }
 
+public struct MusicSearchPage: Sendable {
+    public let results: MusicSearchResults
+    public let hasMore: Bool
+
+    public init(results: MusicSearchResults, hasMore: Bool) {
+        self.results = results
+        self.hasMore = hasMore
+    }
+}
+
 public struct MusicSearchResults: Codable, Hashable, Sendable {
     public let songs: [MusicSong]
     public let albums: [MusicAlbum]
@@ -362,7 +389,7 @@ public struct MusicSearchResults: Codable, Hashable, Sendable {
         )
     }
 
-    private init(songs: [MusicSong], albums: [MusicAlbum], artists: [MusicArtist], playlists: [MusicPlaylist], meta: MusicSearchMeta?) {
+    public init(songs: [MusicSong], albums: [MusicAlbum], artists: [MusicArtist], playlists: [MusicPlaylist], meta: MusicSearchMeta? = nil) {
         self.songs = songs
         self.albums = albums
         self.artists = artists

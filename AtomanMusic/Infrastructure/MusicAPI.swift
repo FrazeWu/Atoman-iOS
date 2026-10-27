@@ -26,6 +26,31 @@ public struct MusicAPI {
         return try JSONDecoder().decode(MusicEnvelope<MusicSearchResults>.self, from: data).data
     }
 
+    public func searchPage(query: String, page: Int, pageSize: Int = 20) async throws -> MusicSearchPage {
+        let response = try await search(query: query, page: page, pageSize: pageSize)
+        return MusicSearchPage(results: response, hasMore: response.meta?.hasNextPage ?? false)
+    }
+
+    // Legacy API kept for existing SDK clients. The native home uses homeFeed.
+    public func discover(pageSize: Int = 20) async throws -> [MusicDiscoverItem] {
+        let albums: MusicPage<MusicAlbum> = try await listPage(
+            path: "music/albums", page: 1, pageSize: pageSize
+        )
+        var items = albums.data.map(MusicDiscoverItem.init(album:))
+        if let playlists: MusicPage<MusicPublicPlaylistCard> = try? await listPage(
+            path: "music/playlists/public", page: 1, pageSize: min(pageSize, 8)
+        ) {
+            items.append(contentsOf: playlists.data.map {
+                MusicDiscoverItem(
+                    type: .playlist, id: $0.id, title: $0.name,
+                    summary: $0.description, imageURL: $0.coverURL,
+                    targetPath: "/music/playlist/\($0.id)", songCount: $0.songCount
+                )
+            })
+        }
+        return items
+    }
+
     // The old /music/discover endpoint was removed. The new home feed uses the
     // public recommendation and playlist APIs plus personalized /music/home.
     public func homeFeed(pageSize: Int = 20) async throws -> MusicHomeFeed {
@@ -322,7 +347,13 @@ public struct MusicAPI {
     }
 
     private func list<Value: Decodable>(path: String, pageSize: Int) async throws -> [Value] {
-        try await listPage(path: path, page: 1, pageSize: pageSize).data
+        var all: [Value] = []
+        for page in 1...40 {
+            let batch: MusicPage<Value> = try await listPage(path: path, page: page, pageSize: pageSize)
+            all.append(contentsOf: batch.data)
+            if !batch.hasMore || batch.data.isEmpty { return all }
+        }
+        throw URLError(.dataLengthExceedsMaximum)
     }
 
     private func listPage<Value: Decodable>(path: String, page: Int, pageSize: Int) async throws -> MusicPage<Value> {
