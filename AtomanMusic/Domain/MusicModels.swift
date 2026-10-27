@@ -238,6 +238,28 @@ public struct MusicDiscoverItem: Codable, Hashable, Identifiable, Sendable {
     public let artists: [MusicArtist]
     public let songCount: Int
 
+    public init(album: MusicAlbum) {
+        self.type = .album
+        self.id = album.id
+        self.title = album.title
+        self.summary = nil
+        self.imageURL = album.resolvedCoverURL
+        self.targetPath = "/music/album/\(album.id)"
+        self.artists = album.artists
+        self.songCount = album.songs.count
+    }
+
+    public init(playlist: MusicPlaylist) {
+        self.type = .playlist
+        self.id = playlist.id
+        self.title = playlist.name
+        self.summary = playlist.description
+        self.imageURL = playlist.coverURL
+        self.targetPath = "/music/playlist/\(playlist.id)"
+        self.artists = []
+        self.songCount = playlist.songCount
+    }
+
     public var displaySubtitle: String? {
         switch type {
         case .album:

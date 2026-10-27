@@ -25,16 +25,36 @@ public struct MusicAPI {
         return try JSONDecoder().decode(MusicEnvelope<MusicSearchResults>.self, from: data).data
     }
 
+    // The legacy /music/discover route was removed. Compose the native home
+    // from the current public catalog endpoints instead of depending on it.
     public func discover(pageSize: Int = 20) async throws -> [MusicDiscoverItem] {
-        let (data, response) = try await client.request(
-            path: "music/discover",
+        let (albumsData, albumsResponse) = try await client.request(
+            path: "music/albums",
             token: authSession.token,
-            queryItems: [URLQueryItem(name: "page_size", value: String(pageSize))]
+            queryItems: [
+                URLQueryItem(name: "page", value: "1"),
+                URLQueryItem(name: "page_size", value: String(pageSize)),
+            ]
         )
-        guard response.statusCode == 200 else {
+        guard albumsResponse.statusCode == 200 else {
             throw URLError(.badServerResponse)
         }
-        return try JSONDecoder().decode(MusicEnvelope<[MusicDiscoverItem]>.self, from: data).data
+        let albums = try JSONDecoder().decode(MusicEnvelope<[MusicAlbum]>.self, from: albumsData).data
+        var results = albums.map(MusicDiscoverItem.init(album:))
+
+        // A transient public-playlist error must not blank a working album home.
+        if let (playlistData, playlistResponse) = try? await client.request(
+            path: "music/playlists/public",
+            token: authSession.token,
+            queryItems: [
+                URLQueryItem(name: "page", value: "1"),
+                URLQueryItem(name: "page_size", value: String(min(pageSize, 8))),
+            ]
+        ), playlistResponse.statusCode == 200,
+           let playlists = try? JSONDecoder().decode(MusicEnvelope<[MusicPlaylist]>.self, from: playlistData).data {
+            results.append(contentsOf: playlists.map(MusicDiscoverItem.init(playlist:)))
+        }
+        return results
     }
 
     public func album(id: String) async throws -> MusicAlbum {

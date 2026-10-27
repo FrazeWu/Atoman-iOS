@@ -33,21 +33,45 @@ final class MusicAPITests: XCTestCase {
         XCTAssertEqual(results.playlists.first?.name, "Echo Mix")
     }
 
-    func testDiscoverDecodesHomeFeedForGuest() async throws {
+    func testDiscoverUsesCurrentCatalogEndpointsForGuest() async throws {
+        var requestedPaths: [String] = []
         let api = makeAPI { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v1/music/discover?page_size=20")
             XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
-            return Self.response(request, body: """
-            {"data":[{"type":"album","id":"album-1","title":"Echo Album","image_url":"https://cdn.example.com/album.jpg","target_path":"/music/album/album-1","artists":[{"id":"artist-1","name":"Echo Artist"}]},{"type":"playlist","id":"playlist-1","title":"Echo Mix","image_url":"https://cdn.example.com/mix.jpg","target_path":"/music/playlist/playlist-1","song_count":3}],"meta":{"page":1,"page_size":20,"total":2,"has_more":false}}
-            """)
+            requestedPaths.append(request.url?.path ?? "")
+            switch request.url?.path {
+            case "/api/v1/music/albums":
+                return Self.response(request, body: """
+                {"data":[{"id":"album-1","title":"Echo Album","cover_url":"https://cdn.example.com/album.jpg","artists":[{"id":"artist-1","name":"Echo Artist"}]}],"meta":{"page":1,"page_size":20,"total":1,"has_more":false}}
+                """)
+            case "/api/v1/music/playlists/public":
+                return Self.response(request, body: """
+                {"data":[{"id":"playlist-1","name":"Echo Mix","cover_url":"https://cdn.example.com/mix.jpg","is_public":true,"is_favorite":false,"song_count":3}],"meta":{"page":1,"page_size":8,"total":1,"has_more":false}}
+                """)
+            default:
+                XCTFail("Unexpected music home request: \(request.url?.absoluteString ?? "")")
+                throw URLError(.unsupportedURL)
+            }
         }
 
         let items = try await api.discover()
-
+        XCTAssertEqual(requestedPaths, ["/api/v1/music/albums", "/api/v1/music/playlists/public"])
         XCTAssertEqual(items.first?.type, .album)
         XCTAssertEqual(items.first?.title, "Echo Album")
         XCTAssertEqual(items.first?.displaySubtitle, "Echo Artist")
         XCTAssertEqual(items.last?.displaySubtitle, "歌单 · 3 首")
+    }
+
+    func testDiscoverKeepsAlbumsWhenPublicPlaylistsFail() async throws {
+        let api = makeAPI { request in
+            if request.url?.path == "/api/v1/music/albums" {
+                return Self.response(request, body: """
+                {"data":[{"id":"album-1","title":"Keep Playing"}],"meta":{"page":1,"page_size":20,"total":1,"has_more":false}}
+                """)
+            }
+            return Self.response(request, statusCode: 503, body: "{}")
+        }
+        let items = try await api.discover()
+        XCTAssertEqual(items.map(\.title), ["Keep Playing"])
     }
 
     func testAlbumDecodesPlayableSongs() async throws {
