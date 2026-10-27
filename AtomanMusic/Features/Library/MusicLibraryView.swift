@@ -97,6 +97,7 @@ struct MusicLibraryView: View {
                 }
             }
             sectionFailure(.playlists, message: "歌单加载失败")
+            loadMoreControl(.playlists)
         }
     }
 
@@ -123,6 +124,7 @@ struct MusicLibraryView: View {
             }
         }
         sectionFailure(.albums, message: "专辑收藏加载失败")
+            loadMoreControl(.albums)
     }
 
     @ViewBuilder
@@ -146,6 +148,7 @@ struct MusicLibraryView: View {
             }
         }
         sectionFailure(.artists, message: "艺人收藏加载失败")
+            loadMoreControl(.artists)
     }
 
     @ViewBuilder
@@ -154,16 +157,19 @@ struct MusicLibraryView: View {
         if !songs.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Text("播放历史").font(.title3.bold())
-                ForEach(songs.prefix(10)) { song in
+                ForEach(songs) { song in
                     MusicTrackRow(song: song, queue: songs)
                 }
             }
         }
         sectionFailure(.history, message: "播放历史加载失败")
+            loadMoreControl(.history)
     }
 
     private func load() async {
+        let accountToken = environment.authSession.token
         await library.load(api: environment.api)
+        guard environment.authSession.token == accountToken else { return }
         environment.synchronizeFavorites(
             favorite: library.favoritePlaylist,
             albums: library.favoriteAlbums,
@@ -181,6 +187,24 @@ struct MusicLibraryView: View {
             } catch {
                 actionErrorMessage = "歌单创建失败"
             }
+        }
+    }
+
+    @ViewBuilder
+    private func loadMoreControl(_ section: MusicLibrarySection) -> some View {
+        if library.moreSections.contains(section) {
+            Button(library.loadingMoreSections.contains(section) ? "加载中…" : "加载更多") {
+                Task {
+                    await library.loadMore(section, api: environment.api)
+                    environment.synchronizeFavorites(
+                        favorite: library.favoritePlaylist,
+                        albums: library.favoriteAlbums,
+                        artists: library.favoriteArtists
+                    )
+                }
+            }
+            .buttonStyle(.bordered)
+            .disabled(library.loadingMoreSections.contains(section))
         }
     }
 

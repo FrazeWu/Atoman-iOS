@@ -36,6 +36,13 @@ public final class MusicPlayer {
     @ObservationIgnored private var isCurrentSongLoaded = false
     @ObservationIgnored private var lastPersistedTime: TimeInterval = 0
     @ObservationIgnored private var queueMessageTask: Task<Void, Never>?
+    @ObservationIgnored private var remoteSessionSave: ((MusicPlaybackSnapshot, Date) async -> Void)?
+    @ObservationIgnored private var remoteProgressSave: ((String, Double, Double, Bool, Date) async -> Void)?
+    @ObservationIgnored private var didInteractLocally = false
+    @ObservationIgnored private var suppressSignedOutSnapshot = false
+    @ObservationIgnored private var applyingRemoteSession = false
+    @ObservationIgnored private var lastRemoteSessionSave = Date.distantPast
+    @ObservationIgnored private var lastRemoteProgressSave = Date.distantPast
 
     public var upcomingSongs: [MusicSong] {
         guard let currentSong,
@@ -69,6 +76,7 @@ public final class MusicPlayer {
             self?.handleTimeUpdate(currentTime: currentTime, duration: duration)
         }
         engine.onPlaybackEnded = { [weak self] in
+            self?.saveRemoteProgress(completed: true, force: true)
             self?.playNext()
         }
         engine.onBufferingChanged = { [weak self] isBuffering in
@@ -107,7 +115,72 @@ public final class MusicPlayer {
         restorePlaybackState()
     }
 
+    // Install sync only for an authenticated account. The local snapshot stays
+    // available offline and server restores never autoplay audio.
+    public func enableRemoteSync(
+        session: @escaping (MusicPlaybackSnapshot, Date) async -> Void,
+        progress: @escaping (String, Double, Double, Bool, Date) async -> Void
+    ) {
+        remoteSessionSave = session
+        remoteProgressSave = progress
+        suppressSignedOutSnapshot = false
+        lastRemoteSessionSave = .distantPast
+        lastRemoteProgressSave = .distantPast
+        if didInteractLocally {
+            persistPlaybackState(forceRemote: true)
+            saveRemoteProgress(force: true)
+        }
+    }
+
+    public func disableRemoteSync() {
+        remoteSessionSave = nil
+        remoteProgressSave = nil
+    }
+
+    public func handleLogout() {
+        disableRemoteSync()
+        // Preserve the in-memory queue and uninterrupted playback, as on web;
+        // prevent the signed-out account's persisted queue from reappearing
+        // when someone else launches the app later.
+        stateStore?.clear()
+        suppressSignedOutSnapshot = true
+        didInteractLocally = false
+    }
+
+    @discardableResult
+    public func restoreRemoteSession(_ session: MusicRemotePlaybackSession) -> Bool {
+        guard !didInteractLocally, !isPlaying, !isCurrentSongLoaded else { return false }
+        let available = session.queue.filter { $0.audioURL?.isEmpty == false }
+        guard !available.isEmpty,
+              available.contains(where: { $0.id == session.currentSongID }) else { return false }
+        applyingRemoteSession = true
+        switch session.playbackMode {
+        case "single": playbackMode = .repeatOne
+        case "random": playbackMode = .shuffle
+        default: playbackMode = .repeatAll
+        }
+        queue.mode = playbackMode
+        queue.load(available, startingAt: session.currentSongID, preservingOrder: true)
+        synchronizeQueueState()
+        currentTime = max(0, session.positionSeconds)
+        lastPersistedTime = currentTime
+        duration = currentSong.map { Double($0.durationSeconds ?? 0) } ?? 0
+        isPlaying = false
+        isCurrentSongLoaded = false
+        persistPlaybackState()
+        updateNowPlayingInfo()
+        applyingRemoteSession = false
+        return true
+    }
+
+    public func flushRemotePlayback() {
+        persistPlaybackState(forceRemote: true)
+        saveRemoteProgress(force: true)
+    }
+
     public func play(songs: [MusicSong], startingAt songID: String? = nil) {
+        didInteractLocally = true
+        suppressSignedOutSnapshot = false
         queue.mode = playbackMode
         queue.load(songs, startingAt: songID)
         synchronizeQueueState()
@@ -115,6 +188,7 @@ public final class MusicPlayer {
     }
 
     public func playNext(_ song: MusicSong) {
+        didInteractLocally = true
         guard currentSong != nil else {
             play(songs: [song], startingAt: song.id)
             return
@@ -126,6 +200,7 @@ public final class MusicPlayer {
     }
 
     public func enqueue(_ song: MusicSong) {
+        didInteractLocally = true
         guard currentSong != nil else {
             play(songs: [song], startingAt: song.id)
             return
@@ -137,30 +212,35 @@ public final class MusicPlayer {
     }
 
     public func moveUpcoming(from sourceIndex: Int, to destinationIndex: Int) {
+        didInteractLocally = true
         guard queue.moveUpcoming(from: sourceIndex, to: destinationIndex) else { return }
         synchronizeQueueState()
         persistPlaybackState()
     }
 
     public func removeUpcoming(at index: Int) {
+        didInteractLocally = true
         guard queue.removeUpcoming(at: index) else { return }
         synchronizeQueueState()
         persistPlaybackState()
     }
 
     public func clearUpcoming() {
+        didInteractLocally = true
         guard queue.clearUpcoming() else { return }
         synchronizeQueueState()
         persistPlaybackState()
     }
 
     public func playQueuedSong(id: String) {
+        didInteractLocally = true
         guard queue.select(songID: id) != nil else { return }
         synchronizeQueueState()
         loadCurrentSong()
     }
 
     public func togglePlayback() {
+        didInteractLocally = true
         guard currentSong != nil else { return }
         if !isCurrentSongLoaded {
             loadCurrentSong(resumeAt: currentTime)
@@ -173,11 +253,13 @@ public final class MusicPlayer {
             engine.play()
             isPlaying = true
         }
-        persistPlaybackState()
+        persistPlaybackState(forceRemote: true)
+        saveRemoteProgress(force: true)
         updateNowPlayingInfo()
     }
 
     public func playNext() {
+        didInteractLocally = true
         guard let next = queue.moveNext() else {
             engine.pause()
             isPlaying = false
@@ -189,6 +271,7 @@ public final class MusicPlayer {
     }
 
     public func playPrevious() {
+        didInteractLocally = true
         if currentTime > 3 {
             seek(to: 0)
             return
@@ -202,20 +285,25 @@ public final class MusicPlayer {
     }
 
     public func seek(to time: TimeInterval) {
+        didInteractLocally = true
         let target = min(max(0, time), duration > 0 ? duration : time)
         engine.seek(to: target)
         currentTime = target
-        persistPlaybackState()
+        persistPlaybackState(forceRemote: true)
+        saveRemoteProgress(force: true)
         updateNowPlayingInfo()
     }
 
     public func cyclePlaybackMode() {
+        didInteractLocally = true
         let modes = MusicPlaybackMode.allCases
         guard let index = modes.firstIndex(of: playbackMode) else { return }
         playbackMode = modes[(index + 1) % modes.count]
+        persistPlaybackState(forceRemote: true)
     }
 
     public func retryCurrentSong() {
+        didInteractLocally = true
         guard currentSong != nil else { return }
         loadCurrentSong(resumeAt: currentTime)
     }
@@ -240,7 +328,7 @@ public final class MusicPlayer {
         }
         engine.play()
         isPlaying = true
-        persistPlaybackState()
+        persistPlaybackState(forceRemote: true)
         updateNowPlayingInfo()
     }
 
@@ -251,6 +339,7 @@ public final class MusicPlayer {
             lastPersistedTime = self.currentTime
             persistPlaybackState()
         }
+        saveRemoteProgress()
         guard let songID = currentSong?.id,
               recordPolicy.shouldRecord(songID: songID, elapsed: currentTime),
               let recordPlay else {
@@ -306,14 +395,33 @@ public final class MusicPlayer {
         updateNowPlayingInfo()
     }
 
-    private func persistPlaybackState() {
+    private func persistPlaybackState(forceRemote: Bool = false) {
         guard let currentSong else { return }
-        stateStore?.save(MusicPlaybackSnapshot(
+        let snapshot = MusicPlaybackSnapshot(
             songs: songs,
             currentSongID: currentSong.id,
             currentTime: currentTime,
             playbackMode: playbackMode
-        ))
+        )
+        if !suppressSignedOutSnapshot { stateStore?.save(snapshot) }
+        guard didInteractLocally, !applyingRemoteSession,
+              let remoteSessionSave else { return }
+        let now = Date()
+        guard forceRemote || now.timeIntervalSince(lastRemoteSessionSave) >= 12 else { return }
+        lastRemoteSessionSave = now
+        Task { await remoteSessionSave(snapshot, now) }
+    }
+
+    private func saveRemoteProgress(completed: Bool = false, force: Bool = false) {
+        guard didInteractLocally, !applyingRemoteSession,
+              let songID = currentSong?.id,
+              let remoteProgressSave else { return }
+        let now = Date()
+        guard force || (isPlaying && now.timeIntervalSince(lastRemoteProgressSave) >= 12) else { return }
+        lastRemoteProgressSave = now
+        let position = currentTime
+        let length = duration
+        Task { await remoteProgressSave(songID, position, length, completed, now) }
     }
 
 #if os(iOS)

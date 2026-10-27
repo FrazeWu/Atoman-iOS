@@ -228,6 +228,39 @@ public enum MusicDiscoverType: String, Codable, Hashable, Sendable {
     case playlist
 }
 
+public struct MusicRemotePlaybackSession: Decodable, Sendable {
+    public let queue: [MusicSong]
+    public let currentSongID: String
+    public let positionSeconds: Double
+    public let playbackMode: String
+
+    enum CodingKeys: String, CodingKey {
+        case queue
+        case currentSongID = "current_song_id"
+        case positionSeconds = "position_seconds"
+        case playbackMode = "playback_mode"
+    }
+}
+
+public struct MusicHomeFeed: Hashable, Sendable {
+    public let recommended: [MusicDiscoverItem]
+    public let latest: [MusicDiscoverItem]
+    public let artists: [MusicDiscoverItem]
+    public let playlists: [MusicDiscoverItem]
+
+    public init(
+        recommended: [MusicDiscoverItem] = [],
+        latest: [MusicDiscoverItem] = [],
+        artists: [MusicDiscoverItem] = [],
+        playlists: [MusicDiscoverItem] = []
+    ) {
+        self.recommended = recommended
+        self.latest = latest
+        self.artists = artists
+        self.playlists = playlists
+    }
+}
+
 public struct MusicDiscoverItem: Codable, Hashable, Identifiable, Sendable {
     public let type: MusicDiscoverType
     public let id: String
@@ -248,6 +281,26 @@ public struct MusicDiscoverItem: Codable, Hashable, Identifiable, Sendable {
         case .playlist:
             return songCount > 0 ? "歌单 · \(songCount) 首" : "歌单"
         }
+    }
+
+    public init(
+        type: MusicDiscoverType,
+        id: String,
+        title: String,
+        summary: String? = nil,
+        imageURL: String? = nil,
+        targetPath: String,
+        artists: [MusicArtist] = [],
+        songCount: Int = 0
+    ) {
+        self.type = type
+        self.id = id
+        self.title = title
+        self.summary = summary
+        self.imageURL = imageURL
+        self.targetPath = targetPath
+        self.artists = artists
+        self.songCount = songCount
     }
 
     enum CodingKeys: String, CodingKey {
@@ -275,11 +328,47 @@ public struct MusicDiscoverItem: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
+public struct MusicSearchMeta: Codable, Hashable, Sendable {
+    public let page: Int
+    public let pageSize: Int
+    public let totals: [String: Int]
+    public let hasMore: [String: Bool]
+    enum CodingKeys: String, CodingKey {
+        case page, totals
+        case pageSize = "page_size"
+        case hasMore = "has_more"
+    }
+    public var hasNextPage: Bool { hasMore.values.contains(true) }
+}
+
 public struct MusicSearchResults: Codable, Hashable, Sendable {
     public let songs: [MusicSong]
     public let albums: [MusicAlbum]
     public let artists: [MusicArtist]
     public let playlists: [MusicPlaylist]
+    public let meta: MusicSearchMeta?
+
+    public func appending(_ page: MusicSearchResults) -> MusicSearchResults {
+        func unique<Item: Identifiable>(_ values: [Item]) -> [Item] where Item.ID: Hashable {
+            var seen = Set<Item.ID>()
+            return values.filter { seen.insert($0.id).inserted }
+        }
+        return MusicSearchResults(
+            songs: unique(songs + page.songs),
+            albums: unique(albums + page.albums),
+            artists: unique(artists + page.artists),
+            playlists: unique(playlists + page.playlists),
+            meta: page.meta
+        )
+    }
+
+    private init(songs: [MusicSong], albums: [MusicAlbum], artists: [MusicArtist], playlists: [MusicPlaylist], meta: MusicSearchMeta?) {
+        self.songs = songs
+        self.albums = albums
+        self.artists = artists
+        self.playlists = playlists
+        self.meta = meta
+    }
 }
 
 public struct MusicAlbumBookmark: Codable, Hashable, Identifiable, Sendable {

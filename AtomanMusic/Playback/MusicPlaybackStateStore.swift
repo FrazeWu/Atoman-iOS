@@ -23,6 +23,11 @@ public struct MusicPlaybackSnapshot: Codable, Hashable, Sendable {
 public protocol MusicPlaybackStateStore: AnyObject {
     func load() -> MusicPlaybackSnapshot?
     func save(_ snapshot: MusicPlaybackSnapshot)
+    func clear()
+}
+
+public extension MusicPlaybackStateStore {
+    func clear() {}
 }
 
 @MainActor
@@ -43,5 +48,9 @@ public final class UserDefaultsMusicPlaybackStateStore: MusicPlaybackStateStore 
     public func save(_ snapshot: MusicPlaybackSnapshot) {
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
         defaults.set(data, forKey: key)
+    }
+
+    public func clear() {
+        defaults.removeObject(forKey: key)
     }
 }

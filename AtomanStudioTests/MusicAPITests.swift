@@ -11,7 +11,7 @@ final class MusicAPITests: XCTestCase {
 
     func testSearchDecodesPlayableCatalog() async throws {
         let api = makeAPI { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v1/music/search?page_size=20&q=echo")
+            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v1/music/search?page=1&page_size=20&q=echo")
             return Self.response(request, body: """
             {
               "data": {
@@ -33,21 +33,110 @@ final class MusicAPITests: XCTestCase {
         XCTAssertEqual(results.playlists.first?.name, "Echo Mix")
     }
 
-    func testDiscoverDecodesHomeFeedForGuest() async throws {
+    func testHomeFeedUsesLiveRecommendationAndPublicPlaylistContracts() async throws {
         let api = makeAPI { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v1/music/discover?page_size=20")
             XCTAssertNil(request.value(forHTTPHeaderField: "Authorization"))
-            return Self.response(request, body: """
-            {"data":[{"type":"album","id":"album-1","title":"Echo Album","image_url":"https://cdn.example.com/album.jpg","target_path":"/music/album/album-1","artists":[{"id":"artist-1","name":"Echo Artist"}]},{"type":"playlist","id":"playlist-1","title":"Echo Mix","image_url":"https://cdn.example.com/mix.jpg","target_path":"/music/playlist/playlist-1","song_count":3}],"meta":{"page":1,"page_size":20,"total":2,"has_more":false}}
-            """)
+            let components = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+            let mode = components?.queryItems?.first(where: { $0.name == "mode" })?.value
+            switch request.url?.path {
+            case "/api/v1/music/recommend/albums":
+                let id = mode == "hot" ? "album-1" : "album-2"
+                return Self.response(request, body: """
+                {"data":[{"id":"\(id)","title":"Echo \(id)","image_url":"https://cdn.example.com/\(id).jpg","target_path":"/music/album/\(id)"}],"meta":{"page":1,"page_size":8,"total":1,"has_more":false}}
+                """)
+            case "/api/v1/music/recommend/artists":
+                return Self.response(request, body: """
+                {"data":[{"id":"artist-1","title":"Echo Artist","target_path":"/music/artist/artist-1"}],"meta":{"has_more":false}}
+                """)
+            case "/api/v1/music/playlists/public":
+                // This is a public summary: it does NOT contain is_favorite.
+                return Self.response(request, body: """
+                {"data":[{"id":"playlist-1","name":"Echo Mix","is_public":true,"song_count":3}],"meta":{"has_more":false}}
+                """)
+            default: throw URLError(.unsupportedURL)
+            }
         }
 
-        let items = try await api.discover()
+        let home = try await api.homeFeed()
+        XCTAssertEqual(home.recommended.first?.type, .album)
+        XCTAssertEqual(home.recommended.first?.title, "Echo album-1")
+        XCTAssertEqual(home.latest.first?.id, "album-2")
+        XCTAssertEqual(home.artists.first?.type, .artist)
+        XCTAssertEqual(home.playlists.first?.displaySubtitle, "歌单 · 3 首")
+    }
 
-        XCTAssertEqual(items.first?.type, .album)
-        XCTAssertEqual(items.first?.title, "Echo Album")
-        XCTAssertEqual(items.first?.displaySubtitle, "Echo Artist")
-        XCTAssertEqual(items.last?.displaySubtitle, "歌单 · 3 首")
+    func testHomeFeedPrefersPersonalizedAlbumsForAuthenticatedListeners() async throws {
+        let api = makeAPI(token: "token-1") { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer token-1")
+            switch request.url?.path {
+            case "/api/v1/music/home":
+                return Self.response(request, body: """
+                {"data":{"personalized":true,"recently_played":[],"for_you":[{"id":"personal-1","title":"Personal Album","cover_url":"https://cdn.example.com/p.jpg","reason":"根据你的收听习惯"}]}}
+                """)
+            case "/api/v1/music/recommend/albums":
+                return Self.response(request, body: """
+                {"data":[{"id":"hot-1","title":"Hot Album","target_path":"/music/album/hot-1"}]}
+                """)
+            case "/api/v1/music/recommend/artists", "/api/v1/music/playlists/public":
+                return Self.response(request, body: "{\"data\":[]}")
+            default: throw URLError(.unsupportedURL)
+            }
+        }
+
+        let home = try await api.homeFeed()
+        XCTAssertEqual(home.recommended.map(\.id), ["personal-1"])
+        XCTAssertEqual(home.recommended.first?.displaySubtitle, "根据你的收听习惯")
+    }
+
+    func testSearchPageMergesAndDeduplicatesStableResults() async throws {
+        let api = makeAPI { request in
+            let comps = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)
+            let page = comps?.queryItems?.first(where: { $0.name == "page" })?.value
+            return Self.response(request, body: """
+            {"data":{"songs":[{"id":"song-\(page == "1" ? "one" : "two")","title":"Song","audio_url":"https://example.com/s.mp3"}],"albums":[],"artists":[],"playlists":[],"meta":{"page":\(page ?? "1"),"page_size":20,"totals":{"song":40,"album":0,"artist":0,"playlist":0},"has_more":{"song":\(page == "1" ? "true" : "false"),"album":false,"artist":false,"playlist":false}}}}
+            """)
+        }
+        let first = try await api.search(query: "song")
+        XCTAssertTrue(first.meta?.hasNextPage == true)
+        let second = try await api.search(query: "song", page: 2)
+        let joined = first.appending(second).appending(second)
+        XCTAssertEqual(joined.songs.map(\.id), ["song-one", "song-two"])
+        XCTAssertFalse(joined.meta?.hasNextPage ?? true)
+    }
+
+    func testRemotePlaybackSessionAndProgressUseBackendFields() async throws {
+        let id = "fd1663f9-96bc-43a7-a805-fd829622e37a"
+        var savedPaths: [String] = []
+        let api = makeAPI(token: "token-1") { request in
+            XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer token-1")
+            let path = request.url!.path
+            if request.httpMethod == "GET" {
+                XCTAssertEqual(path, "/api/v1/music/playback-session")
+                return Self.response(request, body: """
+                {"data":{"queue":[{"id":"\(id)","title":"Track","audio_url":"https://cdn.example.com/song.mp3"}],"current_song_id":"\(id)","position_seconds":42.5,"playback_mode":"single","updated_at":"2026-10-27T12:00:00Z"}}
+                """)
+            }
+            savedPaths.append(path)
+            let body = try XCTUnwrap(Self.jsonBody(from: request))
+            XCTAssertNotNil(body["reported_at"] as? String)
+            if path == "/api/v1/music/playback-session" {
+                XCTAssertEqual(body["current_song_id"] as? String, id)
+                XCTAssertEqual(body["playback_mode"] as? String, "single")
+                XCTAssertEqual(body["song_ids"] as? [String], [id])
+            } else {
+                XCTAssertEqual(body["song_id"] as? String, id)
+                XCTAssertEqual(body["position_seconds"] as? Double, 42.5)
+            }
+            return Self.response(request, body: "{\"data\":{}}")
+        }
+        let remote = try await api.playbackSession()
+        let session = try XCTUnwrap(remote)
+        XCTAssertEqual(session.queue.first?.id, id)
+        XCTAssertEqual(session.positionSeconds, 42.5)
+        let snapshot = MusicPlaybackSnapshot(songs: session.queue, currentSongID: id, currentTime: 42.5, playbackMode: .repeatOne)
+        try await api.savePlaybackSession(snapshot)
+        try await api.savePlaybackProgress(songID: id, position: 42.5, duration: 200, completed: false)
+        XCTAssertEqual(savedPaths, ["/api/v1/music/playback-session", "/api/v1/music/playback-progress"])
     }
 
     func testAlbumDecodesPlayableSongs() async throws {

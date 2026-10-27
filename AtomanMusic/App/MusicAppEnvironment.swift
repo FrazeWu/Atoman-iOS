@@ -43,9 +43,35 @@ public final class MusicAppEnvironment {
         }
         if authSession.isAuthenticated {
             await refreshFavorites()
+            await establishRemotePlayback()
         } else {
+            player.disableRemoteSync()
             clearUserState()
         }
+    }
+
+    private func establishRemotePlayback() async {
+        guard let activeToken = authSession.token, !activeToken.isEmpty else { return }
+        // Read the server first; registering save callbacks before the restore
+        // would otherwise risk overwriting another device's latest session.
+        let remote = try? await api.playbackSession()
+        guard authSession.token == activeToken else { return }
+        if let remote { player.restoreRemoteSession(remote) }
+        let api = self.api
+        let session = authSession
+        player.enableRemoteSync(
+            session: { snapshot, reportedAt in
+                guard session.token == activeToken else { return }
+                try? await api.savePlaybackSession(snapshot, reportedAt: reportedAt)
+            },
+            progress: { songID, position, duration, completed, reportedAt in
+                guard session.token == activeToken else { return }
+                try? await api.savePlaybackProgress(
+                    songID: songID, position: position, duration: duration,
+                    completed: completed, reportedAt: reportedAt
+                )
+            }
+        )
     }
 
     public func refreshFavorites() async {
@@ -108,6 +134,7 @@ public final class MusicAppEnvironment {
     public func completeAuthentication() async {
         guard authSession.isAuthenticated, authentication.isPresented else { return }
         await refreshFavorites()
+        await establishRemotePlayback()
         guard let action = authentication.takePendingAction() else {
             authentication.dismiss(clearPendingAction: false)
             return
@@ -126,6 +153,7 @@ public final class MusicAppEnvironment {
     }
 
     public func logout() {
+        player.handleLogout()
         authSession.clear()
         clearUserState()
         authentication.dismiss()

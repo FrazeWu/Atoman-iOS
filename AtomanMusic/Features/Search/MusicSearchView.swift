@@ -5,7 +5,11 @@ struct MusicSearchView: View {
     @State private var query = ""
     @State private var results: MusicSearchResults?
     @State private var isLoading = false
+    @State private var isLoadingMore = false
+    @State private var currentPage = 1
+    @State private var activeQuery = ""
     @State private var errorMessage: String?
+    @State private var loadMoreError: String?
 
     var body: some View {
         ScrollView {
@@ -16,6 +20,18 @@ struct MusicSearchView: View {
                     ContentUnavailableView(errorMessage, systemImage: "exclamationmark.magnifyingglass")
                 } else if let results {
                     resultSections(results)
+                    if results.meta?.hasNextPage == true {
+                        Button(isLoadingMore ? "加载中…" : "加载更多") {
+                            Task { await loadMore() }
+                        }
+                        .buttonStyle(.bordered)
+                        .disabled(isLoadingMore)
+                        .frame(maxWidth: .infinity)
+                        .accessibilityIdentifier("music-search-load-more")
+                    }
+                    if let loadMoreError {
+                        Text(loadMoreError).font(.caption).foregroundStyle(.secondary)
+                    }
                 } else {
                     ContentUnavailableView("搜索音乐", systemImage: "magnifyingglass")
                         .padding(.top, 80)
@@ -112,22 +128,50 @@ struct MusicSearchView: View {
 
     private func search() async {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        activeQuery = trimmed
+        results = nil
+        errorMessage = nil
+        loadMoreError = nil
+        currentPage = 1
+        isLoadingMore = false
         guard !trimmed.isEmpty else {
-            results = nil
-            errorMessage = nil
             isLoading = false
             return
         }
         try? await Task.sleep(nanoseconds: 350_000_000)
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, activeQuery == trimmed else { return }
         isLoading = true
         do {
-            results = try await environment.api.search(query: trimmed)
+            let page = try await environment.api.search(query: trimmed, page: 1)
+            guard !Task.isCancelled, activeQuery == trimmed else { return }
+            results = page
             await environment.refreshFavorites()
-            errorMessage = nil
         } catch {
+            guard !Task.isCancelled, activeQuery == trimmed else { return }
             errorMessage = "搜索失败"
         }
-        isLoading = false
+        if activeQuery == trimmed { isLoading = false }
+    }
+
+    private func loadMore() async {
+        let searched = activeQuery
+        guard !searched.isEmpty,
+              let existing = results,
+              existing.meta?.hasNextPage == true,
+              !isLoadingMore else { return }
+        isLoadingMore = true
+        loadMoreError = nil
+        let nextPage = currentPage + 1
+        do {
+            let next = try await environment.api.search(query: searched, page: nextPage)
+            guard activeQuery == searched, !Task.isCancelled else { return }
+            results = existing.appending(next)
+            currentPage = nextPage
+        } catch {
+            if activeQuery == searched, !Task.isCancelled {
+                loadMoreError = "加载更多失败，可重试"
+            }
+        }
+        if activeQuery == searched { isLoadingMore = false }
     }
 }

@@ -1,6 +1,7 @@
 import SwiftUI
 
 public struct MusicRootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @State private var environment: MusicAppEnvironment
 
     public init(environment: MusicAppEnvironment) {
@@ -13,6 +14,9 @@ public struct MusicRootView: View {
             .tint(.musicAccent)
             .preferredColorScheme(.dark)
             .task { await environment.restoreAuthentication() }
+            .onChange(of: scenePhase) { _, phase in
+                if phase != .active { environment.player.flushRemotePlayback() }
+            }
     }
 }
 

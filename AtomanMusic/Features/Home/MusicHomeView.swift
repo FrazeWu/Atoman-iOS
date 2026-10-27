@@ -2,7 +2,7 @@ import SwiftUI
 
 struct MusicHomeView: View {
     @Environment(MusicAppEnvironment.self) private var environment
-    @State private var items: [MusicDiscoverItem] = []
+    @State private var feed = MusicHomeFeed()
     @State private var history: [MusicHistoryItem] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
@@ -12,7 +12,7 @@ struct MusicHomeView: View {
             LazyVStack(alignment: .leading, spacing: 24) {
                 if isLoading {
                     ProgressView().frame(maxWidth: .infinity).padding(.top, 80)
-                } else if let errorMessage, items.isEmpty {
+                } else if let errorMessage, feed.recommended.isEmpty && feed.latest.isEmpty {
                     ContentUnavailableView {
                         Label(errorMessage, systemImage: "wifi.exclamationmark")
                     } actions: {
@@ -21,11 +21,11 @@ struct MusicHomeView: View {
                 } else {
                     if !historySongs.isEmpty {
                         recentSection
-                    } else if !quickDiscoverItems.isEmpty {
-                        quickDiscoverSection
                     }
-                    discoverSection(title: "为你推荐", items: recommendationItems)
-                    discoverSection(title: "新鲜发现", items: discoveryItems)
+                    discoverSection(title: "为你推荐", items: feed.recommended)
+                    discoverSection(title: "新鲜发现", items: feed.latest)
+                    discoverSection(title: "发现艺人", items: feed.artists)
+                    discoverSection(title: "精选歌单", items: feed.playlists)
                 }
             }
             .padding(.horizontal, 16)
@@ -59,27 +59,6 @@ struct MusicHomeView: View {
                     }
                     .buttonStyle(.plain)
                 }
-            }
-        }
-    }
-
-    private var quickDiscoverSection: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-            ForEach(quickDiscoverItems) { item in
-                NavigationLink(value: item.destination) {
-                    HStack(spacing: 9) {
-                        MusicArtworkView(url: item.imageURL, cornerRadius: 4)
-                            .frame(width: 52, height: 52)
-                        Text(item.title)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.trailing, 8)
-                    .background(Color.musicSurface, in: RoundedRectangle(cornerRadius: 5, style: .continuous))
-                }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -121,20 +100,6 @@ struct MusicHomeView: View {
         history.compactMap(\.song)
     }
 
-    private var quickDiscoverItems: [MusicDiscoverItem] {
-        guard historySongs.isEmpty else { return [] }
-        let count = items.count >= 8 ? 6 : min(2, items.count)
-        return Array(items.prefix(count))
-    }
-
-    private var recommendationItems: [MusicDiscoverItem] {
-        Array(items.dropFirst(quickDiscoverItems.count).prefix(8))
-    }
-
-    private var discoveryItems: [MusicDiscoverItem] {
-        Array(items.dropFirst(quickDiscoverItems.count + recommendationItems.count))
-    }
-
     private var greeting: String {
         switch Calendar.current.component(.hour, from: Date()) {
         case 5..<12: "早上好"
@@ -144,19 +109,24 @@ struct MusicHomeView: View {
     }
 
     private func load() async {
+        let accountToken = environment.authSession.token
         isLoading = true
         do {
-            items = try await environment.api.discover()
-            if environment.authSession.isAuthenticated {
-                history = (try? await environment.api.history(pageSize: 12)) ?? []
-            } else {
-                history = []
-            }
+            let nextFeed = try await environment.api.homeFeed()
+            guard !Task.isCancelled, environment.authSession.token == accountToken else { return }
+            let nextHistory = environment.authSession.isAuthenticated
+                ? ((try? await environment.api.history(pageSize: 12)) ?? [])
+                : []
+            guard !Task.isCancelled, environment.authSession.token == accountToken else { return }
+            feed = nextFeed
+            history = nextHistory
             await environment.refreshFavorites()
             errorMessage = nil
         } catch {
-            errorMessage = "内容加载失败"
+            if !Task.isCancelled, environment.authSession.token == accountToken {
+                errorMessage = "内容加载失败"
+            }
         }
-        isLoading = false
+        if environment.authSession.token == accountToken { isLoading = false }
     }
 }
