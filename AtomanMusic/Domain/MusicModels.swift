@@ -304,6 +304,16 @@ public struct MusicSearchResults: Codable, Hashable, Sendable {
     public let playlists: [MusicPlaylist]
 }
 
+public struct MusicSearchPage: Sendable {
+    public let results: MusicSearchResults
+    public let hasMore: Bool
+
+    public init(results: MusicSearchResults, hasMore: Bool) {
+        self.results = results
+        self.hasMore = hasMore
+    }
+}
+
 public struct MusicAlbumBookmark: Codable, Hashable, Identifiable, Sendable {
     public let id: String
     public let albumID: String

@@ -5,6 +5,10 @@ struct MusicSearchView: View {
     @State private var query = ""
     @State private var results: MusicSearchResults?
     @State private var isLoading = false
+    @State private var isLoadingMore = false
+    @State private var hasMore = false
+    @State private var currentPage = 0
+    @State private var currentQuery = ""
     @State private var errorMessage: String?
 
     var body: some View {
@@ -16,6 +20,14 @@ struct MusicSearchView: View {
                     ContentUnavailableView(errorMessage, systemImage: "exclamationmark.magnifyingglass")
                 } else if let results {
                     resultSections(results)
+                    if hasMore {
+                        Button(isLoadingMore ? "正在加载…" : "加载更多") {
+                            Task { await loadMore() }
+                        }
+                        .disabled(isLoadingMore)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                    }
                 } else {
                     ContentUnavailableView("搜索音乐", systemImage: "magnifyingglass")
                         .padding(.top, 80)
@@ -114,6 +126,9 @@ struct MusicSearchView: View {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             results = nil
+            hasMore = false
+            currentPage = 0
+            currentQuery = ""
             errorMessage = nil
             isLoading = false
             return
@@ -122,7 +137,12 @@ struct MusicSearchView: View {
         guard !Task.isCancelled else { return }
         isLoading = true
         do {
-            results = try await environment.api.search(query: trimmed)
+            let page = try await environment.api.searchPage(query: trimmed, page: 1)
+            guard !Task.isCancelled else { return }
+            results = page.results
+            hasMore = page.hasMore
+            currentPage = 1
+            currentQuery = trimmed
             await environment.refreshFavorites()
             errorMessage = nil
         } catch {
@@ -130,4 +150,27 @@ struct MusicSearchView: View {
         }
         isLoading = false
     }
+
+    private func loadMore() async {
+        guard !isLoadingMore, hasMore, !currentQuery.isEmpty else { return }
+        isLoadingMore = true
+        defer { isLoadingMore = false }
+        do {
+            let nextPage = currentPage + 1
+            let page = try await environment.api.searchPage(query: currentQuery, page: nextPage)
+            guard query.trimmingCharacters(in: .whitespacesAndNewlines) == currentQuery,
+                  let existing = results else { return }
+            results = MusicSearchResults(
+                songs: existing.songs + page.results.songs,
+                albums: existing.albums + page.results.albums,
+                artists: existing.artists + page.results.artists,
+                playlists: existing.playlists + page.results.playlists
+            )
+            currentPage = nextPage
+            hasMore = page.hasMore
+        } catch {
+            errorMessage = "加载更多失败，请重新搜索"
+        }
+    }
+
 }

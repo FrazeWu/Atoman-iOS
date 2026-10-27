@@ -11,18 +11,24 @@ public struct MusicAPI {
     }
 
     public func search(query: String, pageSize: Int = 20) async throws -> MusicSearchResults {
+        try await searchPage(query: query, page: 1, pageSize: pageSize).results
+    }
+
+    public func searchPage(query: String, page: Int, pageSize: Int = 20) async throws -> MusicSearchPage {
         let (data, response) = try await client.request(
             path: "music/search",
             token: authSession.token,
             queryItems: [
                 URLQueryItem(name: "q", value: query),
+                URLQueryItem(name: "page", value: String(max(1, page))),
                 URLQueryItem(name: "page_size", value: String(pageSize)),
             ]
         )
-        guard response.statusCode == 200 else {
-            throw URLError(.badServerResponse)
-        }
-        return try JSONDecoder().decode(MusicEnvelope<MusicSearchResults>.self, from: data).data
+        guard response.statusCode == 200 else { throw URLError(.badServerResponse) }
+        let payload = try JSONDecoder().decode(MusicEnvelope<MusicSearchPayload>.self, from: data).data
+        let results = MusicSearchResults(songs: payload.songs, albums: payload.albums,
+                                         artists: payload.artists, playlists: payload.playlists)
+        return MusicSearchPage(results: results, hasMore: payload.meta?.hasMore.values.contains(true) ?? false)
     }
 
     // The legacy /music/discover route was removed. Compose the native home
@@ -218,18 +224,25 @@ public struct MusicAPI {
     }
 
     private func list<Value: Decodable>(path: String, pageSize: Int) async throws -> [Value] {
-        let (data, response) = try await client.request(
-            path: path,
-            token: authSession.token,
-            queryItems: [
-                URLQueryItem(name: "page", value: "1"),
-                URLQueryItem(name: "page_size", value: String(pageSize)),
-            ]
-        )
-        guard response.statusCode == 200 else {
-            throw URLError(.badServerResponse)
+        var all: [Value] = []
+        var page = 1
+        let size = max(1, min(pageSize, 100))
+        while true {
+            let (data, response) = try await client.request(
+                path: path,
+                token: authSession.token,
+                queryItems: [
+                    URLQueryItem(name: "page", value: String(page)),
+                    URLQueryItem(name: "page_size", value: String(size)),
+                ]
+            )
+            guard response.statusCode == 200 else { throw URLError(.badServerResponse) }
+            let result = try JSONDecoder().decode(MusicListEnvelope<Value>.self, from: data)
+            all.append(contentsOf: result.data)
+            guard result.meta?.hasMore == true, !result.data.isEmpty else { break }
+            page += 1
         }
-        return try JSONDecoder().decode(MusicEnvelope<[Value]>.self, from: data).data
+        return all
     }
 
     private func send(
@@ -252,6 +265,29 @@ public struct MusicAPI {
 
 private struct MusicEnvelope<Value: Decodable>: Decodable {
     let data: Value
+}
+
+private struct MusicSearchPayload: Decodable {
+    let songs: [MusicSong]
+    let albums: [MusicAlbum]
+    let artists: [MusicArtist]
+    let playlists: [MusicPlaylist]
+    let meta: MusicSearchMeta?
+}
+
+private struct MusicSearchMeta: Decodable {
+    let hasMore: [String: Bool]
+    enum CodingKeys: String, CodingKey { case hasMore = "has_more" }
+}
+
+private struct MusicListEnvelope<Value: Decodable>: Decodable {
+    let data: [Value]
+    let meta: MusicListMeta?
+}
+
+private struct MusicListMeta: Decodable {
+    let hasMore: Bool
+    enum CodingKeys: String, CodingKey { case hasMore = "has_more" }
 }
 
 private struct MusicSongIDRequest: Encodable {

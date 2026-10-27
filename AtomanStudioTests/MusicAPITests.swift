@@ -11,7 +11,7 @@ final class MusicAPITests: XCTestCase {
 
     func testSearchDecodesPlayableCatalog() async throws {
         let api = makeAPI { request in
-            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v1/music/search?page_size=20&q=echo")
+            XCTAssertEqual(request.url?.absoluteString, "https://example.com/api/v1/music/search?page=1&page_size=20&q=echo")
             return Self.response(request, body: """
             {
               "data": {
@@ -31,6 +31,35 @@ final class MusicAPITests: XCTestCase {
         XCTAssertEqual(results.albums.first?.title, "Echo Album")
         XCTAssertEqual(results.artists.first?.name, "Echo Artist")
         XCTAssertEqual(results.playlists.first?.name, "Echo Mix")
+    }
+
+    func testSearchPaginationUsesServerHasMoreAndNextPage() async throws {
+        let api = makeAPI { request in
+            let page = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?
+                .first(where: { $0.name == "page" })?.value
+            XCTAssertEqual(page, "2")
+            return Self.response(request, body: """
+            {"data":{"songs":[{"id":"song-2","title":"Second Page"}],"albums":[],"artists":[],"playlists":[],"meta":{"page":2,"page_size":20,"totals":{"song":21,"album":0,"artist":0,"playlist":0},"has_more":{"song":false,"album":false,"artist":false,"playlist":false}}}}
+            """)
+        }
+        let page = try await api.searchPage(query: "echo", page: 2)
+        XCTAssertEqual(page.results.songs.first?.title, "Second Page")
+        XCTAssertFalse(page.hasMore)
+    }
+
+    func testLibraryPaginatesUntilHasMoreIsFalse() async throws {
+        var pages: [String] = []
+        let api = makeAPI { request in
+            let page = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?
+                .first(where: { $0.name == "page" })?.value ?? ""
+            pages.append(page)
+            return Self.response(request, body: """
+            {"data":[{"id":"playlist-\(page)","name":"List \(page)","is_public":false,"is_favorite":false,"song_count":0}],"meta":{"page":\(page),"page_size":50,"total":2,"has_more":\(page == "1" ? "true" : "false")}}
+            """)
+        }
+        let playlists = try await api.playlists()
+        XCTAssertEqual(pages, ["1", "2"])
+        XCTAssertEqual(playlists.map(\.name), ["List 1", "List 2"])
     }
 
     func testDiscoverUsesCurrentCatalogEndpointsForGuest() async throws {
